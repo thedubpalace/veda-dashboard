@@ -9,3 +9,10 @@ env/
 .idea/
 .vscode/
 *.egg-info/
+
+# scratch / one-shot helpers
+_register.py
+_selfcheck.py
+_*.log
+_uvicorn.*
+
