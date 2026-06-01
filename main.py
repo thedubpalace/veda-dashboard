@@ -4,6 +4,7 @@ Run: uvicorn main:app --reload --port 8765
 """
 from __future__ import annotations
 
+import asyncio
 import shlex
 import socket
 import subprocess
@@ -11,14 +12,13 @@ from pathlib import Path
 from typing import Any
 
 import psutil
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 
 from services import docker_service, veda_apps, vmware_service
 
 BASE_DIR = Path(__file__).resolve().parent
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+INDEX_HTML = BASE_DIR / "templates" / "index.html"
 
 app = FastAPI(title="Veda Dashboard")
 
@@ -33,8 +33,11 @@ except AttributeError:
 # Page
 # ----------------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("index.html", {"request": request})
+async def index() -> HTMLResponse:
+    # The page is fully client-rendered (data via /api/* fetches), so the
+    # template has no server-side variables — serve it as static HTML. This
+    # also sidesteps a Jinja2 template-cache bug on this Python/Jinja combo.
+    return HTMLResponse(INDEX_HTML.read_text(encoding="utf-8"))
 
 
 # ----------------------------------------------------------------------------
@@ -42,11 +45,16 @@ async def index(request: Request) -> HTMLResponse:
 # ----------------------------------------------------------------------------
 @app.get("/api/status")
 async def status() -> dict[str, Any]:
-    return {
-        "veda": veda_apps.list_apps(),
-        "docker": docker_service.list_containers(),
-        "vmware": vmware_service.list_vms(),
-    }
+    # Each source does blocking I/O (subprocess / sockets / process scan). Run
+    # them concurrently in threads so the response is bounded by the slowest
+    # source rather than their sum, and the event loop stays unblocked.
+    loop = asyncio.get_running_loop()
+    veda, docker, vmware = await asyncio.gather(
+        loop.run_in_executor(None, veda_apps.list_apps),
+        loop.run_in_executor(None, docker_service.list_containers),
+        loop.run_in_executor(None, vmware_service.list_vms),
+    )
+    return {"veda": veda, "docker": docker, "vmware": vmware}
 
 
 # ----------------------------------------------------------------------------
