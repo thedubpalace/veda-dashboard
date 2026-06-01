@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Veda Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            base: "#0f1117",
+            card: "#1e2330",
+            cardhi: "#262c3d",
+            edge: "#2d3343",
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { background: #0f1117; }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35);
+      border-top-color: #fff; border-radius: 50%; display: inline-block;
+      animation: spin .6s linear infinite; vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast-in { animation: toastIn .25s ease-out; }
+    @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+  </style>
+</head>
+<body class="text-slate-200 min-h-screen antialiased">
+  <!-- Toasts -->
+  <div id="toasts" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80"></div>
+
+  <div class="max-w-6xl mx-auto px-4 py-8">
+    <header class="flex items-center justify-between mb-8">
+      <div>
+        <h1 class="text-2xl font-semibold text-white flex items-center gap-2">
+          <span class="text-emerald-400">●</span> Veda Dashboard
+        </h1>
+        <p class="text-sm text-slate-400 mt-1">Unified control panel — Veda apps, Docker, VMware</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="lastUpdated" class="text-xs text-slate-500"></span>
+        <button id="refreshBtn" onclick="refreshAll()"
+          class="px-3 py-1.5 text-sm rounded-md bg-card hover:bg-cardhi border border-edge transition">
+          ↻ Refresh
+        </button>
+      </div>
+    </header>
+
+    <!-- Veda Apps -->
+    <section class="mb-6">
+      <div class="bg-card border border-edge rounded-xl overflow-hidden">
+        <div class="px-5 py-3 border-b border-edge flex items-center justify-between">
+          <h2 class="font-medium text-white flex items-center gap-2">🧩 Veda Apps</h2>
+          <span id="vedaCount" class="text-xs text-slate-500"></span>
+        </div>
+        <div id="vedaBody" class="divide-y divide-edge/60">
+          <div class="px-5 py-6 text-sm text-slate-500">Loading…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Docker -->
+    <section class="mb-6">
+      <div class="bg-card border border-edge rounded-xl overflow-hidden">
+        <div class="px-5 py-3 border-b border-edge flex items-center justify-between">
+          <h2 class="font-medium text-white flex items-center gap-2">🐳 Docker Containers</h2>
+          <span id="dockerCount" class="text-xs text-slate-500"></span>
+        </div>
+        <div id="dockerBody" class="divide-y divide-edge/60">
+          <div class="px-5 py-6 text-sm text-slate-500">Loading…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VMware -->
+    <section class="mb-6">
+      <div class="bg-card border border-edge rounded-xl overflow-hidden">
+        <div class="px-5 py-3 border-b border-edge flex items-center justify-between">
+          <h2 class="font-medium text-white flex items-center gap-2">💻 VMware VMs</h2>
+          <span id="vmwareCount" class="text-xs text-slate-500"></span>
+        </div>
+        <div id="vmwareBody" class="divide-y divide-edge/60">
+          <div class="px-5 py-6 text-sm text-slate-500">Loading…</div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="text-center text-xs text-slate-600 mt-8">
+      Auto-refresh every 10s · port 8765
+    </footer>
+  </div>
+
+  <script>
+    // ---------- helpers ----------
+    function el(tag, cls, html) {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (html !== undefined) e.innerHTML = html;
+      return e;
+    }
+
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      }[c]));
+    }
+
+    function badge(status) {
+      const running = status === "running";
+      const dot = running ? "🟢" : "🔴";
+      const label = running ? "Running" : "Stopped";
+      const color = running ? "text-emerald-400" : "text-rose-400";
+      return `<span class="text-xs font-medium ${color} whitespace-nowrap">${dot} ${label}</span>`;
+    }
+
+    function toast(message, ok = true) {
+      const wrap = document.getElementById("toasts");
+      const t = el("div",
+        `toast-in px-4 py-3 rounded-lg shadow-lg text-sm border ${
+          ok ? "bg-emerald-950 border-emerald-700 text-emerald-200"
+             : "bg-rose-950 border-rose-700 text-rose-200"}`,
+        `${ok ? "✓" : "✕"} ${esc(message)}`);
+      wrap.appendChild(t);
+      setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .3s"; }, 3200);
+      setTimeout(() => t.remove(), 3600);
+    }
+
+    function btn(label, kind, onClick) {
+      const palette = kind === "start"
+        ? "bg-emerald-700/80 hover:bg-emerald-600 border-emerald-600"
+        : "bg-rose-700/80 hover:bg-rose-600 border-rose-600";
+      const b = el("button",
+        `px-3 py-1 text-xs rounded-md border ${palette} text-white transition disabled:opacity-50 disabled:cursor-not-allowed min-w-[64px]`,
+        label);
+      b.dataset.label = label;
+      b.onclick = () => onClick(b);
+      return b;
+    }
+
+    async function action(b, url, body) {
+      const all = b.parentElement.querySelectorAll("button");
+      all.forEach((x) => (x.disabled = true));
+      const original = b.innerHTML;
+      b.innerHTML = '<span class="spinner"></span>';
+      try {
+        const opts = { method: "POST" };
+        if (body) {
+          opts.headers = { "Content-Type": "application/json" };
+          opts.body = JSON.stringify(body);
+        }
+        const res = await fetch(url, opts);
+        let data = {};
+        try { data = await res.json(); } catch (_) {}
+        const ok = res.ok && data.ok !== false;
+        toast(data.message || data.error || (ok ? "Done" : "Failed"), ok);
+      } catch (e) {
+        toast(e.message || "Request failed", false);
+      } finally {
+        b.innerHTML = original;
+        all.forEach((x) => (x.disabled = false));
+        setTimeout(refreshAll, 600);
+      }
+    }
+
+    function row(cells, actions) {
+      const r = el("div", "px-5 py-3 flex items-center gap-4");
+      const main = el("div", "flex-1 min-w-0");
+      main.append(...cells);
+      r.appendChild(main);
+      const act = el("div", "flex items-center gap-2 shrink-0");
+      actions.forEach((a) => act.appendChild(a));
+      r.appendChild(act);
+      return r;
+    }
+
+    function emptyRow(text) {
+      return el("div", "px-5 py-6 text-sm text-slate-500", esc(text));
+    }
+
+    // ---------- renderers ----------
+    function renderVeda(apps) {
+      const body = document.getElementById("vedaBody");
+      document.getElementById("vedaCount").textContent = `${apps.length} app(s)`;
+      body.innerHTML = "";
+      if (!apps.length) { body.appendChild(emptyRow("No apps in registry.")); return; }
+      apps.forEach((a) => {
+        const title = el("div", "flex items-center gap-2",
+          `<span class="font-medium text-white truncate">${esc(a.name)}</span>${badge(a.status)}`);
+        const desc = el("div", "text-xs text-slate-400 truncate mt-0.5", esc(a.description || ""));
+        const meta = el("div", "text-[11px] text-slate-600 truncate mt-0.5 font-mono", esc(a.runCmd || ""));
+        const start = btn("Start", "start", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/start`));
+        const stop = btn("Stop", "stop", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/stop`));
+        body.appendChild(row([title, desc, meta], [start, stop]));
+      });
+    }
+
+    function renderDocker(d) {
+      const body = document.getElementById("dockerBody");
+      const count = document.getElementById("dockerCount");
+      body.innerHTML = "";
+      if (!d || d.available === false) {
+        count.textContent = "unavailable";
+        body.appendChild(emptyRow("Docker is not installed or not running."));
+        return;
+      }
+      const list = d.containers || [];
+      count.textContent = `${list.length} container(s)`;
+      if (d.error) { body.appendChild(emptyRow("Error: " + d.error)); return; }
+      if (!list.length) { body.appendChild(emptyRow("No containers.")); return; }
+      list.forEach((c) => {
+        const title = el("div", "flex items-center gap-2",
+          `<span class="font-medium text-white truncate">${esc(c.name)}</span>${badge(c.status)}`);
+        const img = el("div", "text-xs text-slate-400 truncate mt-0.5", "image: " + esc(c.image || ""));
+        const ports = el("div", "text-[11px] text-slate-600 truncate mt-0.5 font-mono",
+          esc(c.ports ? c.ports : c.statusText || ""));
+        const start = btn("Start", "start", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/start`));
+        const stop = btn("Stop", "stop", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/stop`));
+        body.appendChild(row([title, img, ports], [start, stop]));
+      });
+    }
+
+    function renderVmware(v) {
+      const body = document.getElementById("vmwareBody");
+      const count = document.getElementById("vmwareCount");
+      body.innerHTML = "";
+      if (!v || v.available === false) {
+        count.textContent = "unavailable";
+        body.appendChild(emptyRow("VMware (vmrun.exe) not found."));
+        return;
+      }
+      const list = v.vms || [];
+      count.textContent = `${list.length} running VM(s)`;
+      if (v.error) { body.appendChild(emptyRow("Error: " + v.error)); return; }
+      if (!list.length) { body.appendChild(emptyRow("No running VMs.")); return; }
+      list.forEach((vm) => {
+        const title = el("div", "flex items-center gap-2",
+          `<span class="font-medium text-white truncate">${esc(vm.name)}</span>${badge(vm.status)}`);
+        const path = el("div", "text-[11px] text-slate-500 truncate mt-0.5 font-mono", esc(vm.vmx));
+        const stop = btn("Stop", "stop", (b) => action(b, "/api/vmware/stop", { vmx: vm.vmx, force: false }));
+        body.appendChild(row([title, path], [stop]));
+      });
+    }
+
+    // ---------- refresh ----------
+    let inFlight = false;
+    async function refreshAll() {
+      if (inFlight) return;
+      inFlight = true;
+      const rb = document.getElementById("refreshBtn");
+      rb.disabled = true;
+      try {
+        const res = await fetch("/api/status");
+        const data = await res.json();
+        renderVeda(data.veda || []);
+        renderDocker(data.docker);
+        renderVmware(data.vmware);
+        document.getElementById("lastUpdated").textContent =
+          "updated " + new Date().toLocaleTimeString();
+      } catch (e) {
+        toast("Failed to load status: " + (e.message || e), false);
+      } finally {
+        rb.disabled = false;
+        inFlight = false;
+      }
+    }
+
+    refreshAll();
+    setInterval(refreshAll, 10000);
+  </script>
+</body>
+</html>
