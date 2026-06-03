@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import shlex
 import socket
 import subprocess
@@ -98,6 +99,16 @@ async def status() -> dict[str, Any]:
         loop.run_in_executor(None, docker_service.list_containers),
         loop.run_in_executor(None, vmware_service.list_vms),
     )
+    # Merge per-app claude session counts
+    all_sessions = _find_claude_sessions()
+    path_to_count: dict[str, int] = {}
+    for s in all_sessions:
+        p = _norm_path(s.get("path"))
+        if p:
+            path_to_count[p] = path_to_count.get(p, 0) + 1
+    for app in veda:
+        app["claudeSessions"] = path_to_count.get(_norm_path(app.get("localPath")), 0)
+
     filters = _load_settings().get("docker", {}).get("filter", [])
     if isinstance(docker, dict) and "containers" in docker:
         docker = dict(docker)
@@ -334,8 +345,16 @@ async def vmware_stop(payload: dict[str, Any]) -> JSONResponse:
 # Claude remote-control sessions
 # ----------------------------------------------------------------------------
 
-def _find_claude_sessions() -> list[dict[str, Any]]:
-    """Return one entry per PowerShell terminal running claude remote-control."""
+def _norm_path(p: str | None) -> str:
+    return str(p).replace("\\", "/").rstrip("/").lower() if p else ""
+
+
+def _find_claude_sessions(app_path: str | None = None) -> list[dict[str, Any]]:
+    """Return one entry per PowerShell terminal running claude remote-control.
+
+    Pass app_path to filter to sessions whose Set-Location matches that path.
+    """
+    norm_filter = _norm_path(app_path) if app_path else None
     results = []
     for proc in psutil.process_iter(["pid", "name", "cmdline"]):
         try:
@@ -343,22 +362,24 @@ def _find_claude_sessions() -> list[dict[str, Any]]:
             if name not in ("powershell", "pwsh"):
                 continue
             cmdline = " ".join(str(c) for c in (proc.info.get("cmdline") or []))
-            if "remote-control" in cmdline and "claude" in cmdline.lower():
-                results.append({"pid": proc.pid})
+            if "remote-control" not in cmdline or "claude" not in cmdline.lower():
+                continue
+            m = re.search(r"Set-Location\s+'([^']+)'", cmdline)
+            path = m.group(1) if m else None
+            if norm_filter and _norm_path(path) != norm_filter:
+                continue
+            results.append({"pid": proc.pid, "path": path})
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return results
 
 
-@app.get("/api/claude-sessions")
-async def claude_sessions_list() -> dict[str, Any]:
-    sessions = _find_claude_sessions()
-    return {"count": len(sessions), "sessions": sessions}
-
-
-@app.post("/api/claude-sessions/kill-all")
-async def claude_sessions_kill_all() -> JSONResponse:
-    sessions = _find_claude_sessions()
+@app.post("/api/apps/{name}/claude-sessions/kill-all")
+async def kill_app_claude_sessions(name: str) -> JSONResponse:
+    entry = veda_apps.get_app(name)
+    if not entry:
+        return JSONResponse({"ok": False, "error": f"unknown app: {name}"}, status_code=404)
+    sessions = _find_claude_sessions(app_path=entry.get("localPath"))
     killed = 0
     for s in sessions:
         try:
