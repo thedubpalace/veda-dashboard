@@ -1,129 +1,197 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Veda Dashboard</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           colors: {
-            base: "#0f1117",
-            card: "#1e2330",
-            cardhi: "#262c3d",
-            edge: "#2d3343",
+            base:      "var(--bg-base)",
+            surface:   "var(--bg-surface)",
+            surfacehi: "var(--bg-surface-hi)",
+            modal:     "var(--bg-modal)",
+            accent:    "var(--accent)",
+            edge:      "var(--border-default)",
+            divider:   "var(--border-divider)",
+          },
+          fontFamily: {
+            sans: ["Inter", "system-ui", "sans-serif"],
+            mono: ["JetBrains Mono", "Fira Code", "monospace"],
           },
         },
       },
     };
   </script>
   <style>
-    body { background: #0f1117; }
-    .spinner {
-      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35);
-      border-top-color: #fff; border-radius: 50%; display: inline-block;
-      animation: spin .6s linear infinite; vertical-align: middle;
+    :root {
+      /* Backgrounds */
+      --bg-base:        #0e0d0b;
+      --bg-surface:     #161410;
+      --bg-surface-hi:  #1c1a15;
+      --bg-modal:       #131109;
+
+      /* Borders */
+      --border-default: #2a2519;
+      --border-divider: #1f1c14;
+      --border-focus:   #d97706;
+
+      /* Text */
+      --text-primary:   #f2ede4;
+      --text-secondary: #a39a88;
+      --text-muted:     #635c4e;
+      --text-on-accent: #171310;
+
+      /* Accent (amber) */
+      --accent:         #d97706;
+      --accent-dim:     #2d2007;
+      --accent-border:  #6b4a12;
+      --accent-text:    #f0a030;
+
+      /* Status: Running */
+      --status-running:      #d97706;
+      --status-running-text: #f0a030;
+      --status-running-bg:   #261c08;
+
+      /* Status: Stopped */
+      --status-stopped:      #404550;
+      --status-stopped-text: #6b7180;
+      --status-stopped-bg:   #191c22;
+
+      /* Typography */
+      --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+      --font-mono: "JetBrains Mono", "Fira Code", monospace;
     }
+
+    .spinner { animation: spin 0.7s linear infinite; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .toast-in { animation: toastIn .25s ease-out; }
-    @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(12px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes backdropIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes panelIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    #dockerModal:not(.hidden) { animation: backdropIn 0.2s ease-out; }
+    #dockerModal:not(.hidden) > div { animation: panelIn 0.2s ease-out; }
   </style>
 </head>
-<body class="text-slate-200 min-h-screen antialiased">
-  <!-- Toasts -->
-  <div id="toasts" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80"></div>
+<body style="background:var(--bg-base); font-family:var(--font-sans); color:var(--text-primary);"
+      class="min-h-screen antialiased">
 
-  <div class="max-w-6xl mx-auto px-4 py-8">
-    <header class="flex items-center justify-between mb-8">
+  <!-- Toasts -->
+  <div id="toasts" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2"></div>
+
+  <div class="max-w-[900px] mx-auto px-6">
+
+    <!-- Header -->
+    <header class="pt-8 pb-10 flex items-end justify-between">
       <div>
-        <h1 class="text-2xl font-semibold text-white flex items-center gap-2">
-          <span class="text-emerald-400">●</span> Veda Dashboard
-        </h1>
-        <p class="text-sm text-slate-400 mt-1">Unified control panel — Veda apps, Docker, VMware</p>
+        <div style="font-size:10px; letter-spacing:0.2em; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Veda</div>
+        <h1 style="font-size:22px; font-weight:600; color:var(--text-primary); line-height:1;">Dashboard</h1>
       </div>
-      <div class="flex items-center gap-3">
-        <span id="lastUpdated" class="text-xs text-slate-500"></span>
-        <button id="refreshBtn" onclick="refreshAll()"
-          class="px-3 py-1.5 text-sm rounded-md bg-card hover:bg-cardhi border border-edge transition">
-          ↻ Refresh
+      <div class="flex items-center gap-4">
+        <span id="lastUpdated" style="font-size:10px; color:var(--text-muted); letter-spacing:0.04em;"></span>
+        <button id="refreshBtn" onclick="refreshAll()" title="Refresh"
+          style="width:28px; height:28px; border:1px solid var(--border-default); border-radius:4px; background:transparent; color:var(--text-secondary); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:border-color 120ms ease;"
+          onmouseover="this.style.borderColor='var(--border-focus)'"
+          onmouseout="this.style.borderColor='var(--border-default)'">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.5 6A4.5 4.5 0 1 1 8 2.1"/>
+            <polyline points="8,1 8,3 10,3"/>
+          </svg>
         </button>
       </div>
     </header>
 
     <!-- Veda Apps -->
-    <section class="mb-6">
-      <div class="bg-card border border-edge rounded-xl overflow-hidden">
-        <div class="px-5 py-3 border-b border-edge flex items-center justify-between">
-          <h2 class="font-medium text-white flex items-center gap-2">🧩 Veda Apps</h2>
-          <span id="vedaCount" class="text-xs text-slate-500"></span>
-        </div>
-        <div id="vedaBody" class="divide-y divide-edge/60">
-          <div class="px-5 py-6 text-sm text-slate-500">Loading…</div>
-        </div>
+    <section class="mb-10">
+      <div class="flex items-baseline justify-between pb-1.5" style="border-bottom:1px solid var(--border-divider);">
+        <h2 style="font-size:11px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-muted);">Veda Apps</h2>
+        <span id="vedaCount" style="font-size:10px; color:var(--text-muted);"></span>
+      </div>
+      <div id="vedaBody">
+        <div style="padding:24px 0; font-size:12px; color:var(--text-muted);">Loading…</div>
       </div>
     </section>
 
     <!-- Docker -->
-    <section class="mb-6">
-      <div class="bg-card border border-edge rounded-xl overflow-hidden">
-        <div class="px-5 py-3 border-b border-edge flex items-center justify-between">
-          <h2 class="font-medium text-white flex items-center gap-2">
-            🐳 Docker Containers
-            <span id="dockerFilterBadge" class="hidden text-[10px] font-medium px-2 py-0.5 rounded-full bg-sky-900/60 text-sky-300 border border-sky-700/50"></span>
-          </h2>
-          <div class="flex items-center gap-3">
-            <span id="dockerCount" class="text-xs text-slate-500"></span>
-            <button onclick="openDockerSettings()"
-              title="Filter settings"
-              class="text-slate-400 hover:text-white transition text-base leading-none px-1">⚙</button>
-          </div>
+    <section class="mb-10">
+      <div class="flex items-baseline justify-between pb-1.5" style="border-bottom:1px solid var(--border-divider);">
+        <h2 style="font-size:11px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-muted);">
+          Docker Containers
+          <span id="dockerFilterBadge" class="hidden" style="font-size:9px; font-weight:500; letter-spacing:0.06em; color:var(--accent-text); margin-left:8px;"></span>
+        </h2>
+        <div class="flex items-center gap-3">
+          <span id="dockerCount" style="font-size:10px; color:var(--text-muted);"></span>
+          <button onclick="openDockerSettings()" title="Filter"
+            style="font-size:10px; color:var(--text-muted); background:none; border:none; cursor:pointer; letter-spacing:0.06em; text-transform:uppercase; transition:color 120ms ease;"
+            onmouseover="this.style.color='var(--text-secondary)'"
+            onmouseout="this.style.color='var(--text-muted)'">Filter</button>
         </div>
-        <div id="dockerBody" class="divide-y divide-edge/60">
-          <div class="px-5 py-6 text-sm text-slate-500">Loading…</div>
-        </div>
+      </div>
+      <div id="dockerBody">
+        <div style="padding:24px 0; font-size:12px; color:var(--text-muted);">Loading…</div>
       </div>
     </section>
 
     <!-- Docker Settings Modal -->
-    <div id="dockerModal" class="hidden fixed inset-0 z-40 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/60" onclick="closeDockerSettings()"></div>
-      <div class="relative bg-card border border-edge rounded-xl w-full max-w-md mx-4 p-6 z-50 shadow-2xl">
-        <h3 class="text-white font-semibold mb-1">Docker Filter</h3>
-        <p class="text-xs text-slate-400 mb-4">แสดงเฉพาะ container ที่ชื่อตรงกับ keyword (partial match) — เว้นว่างเพื่อแสดงทั้งหมด</p>
-        <div id="filterTags" class="flex flex-wrap gap-2 mb-3 min-h-[32px]"></div>
-        <div class="flex gap-2">
-          <input id="filterInput" type="text" placeholder="พิมพ์ชื่อ container แล้วกด Enter"
-            class="flex-1 bg-base border border-edge rounded-md px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+    <div id="dockerModal" class="hidden fixed inset-0 z-40 flex items-center justify-center"
+         style="background:rgba(0,0,0,0.72);" onclick="closeDockerSettings()">
+      <div style="background:var(--bg-modal); border:1px solid var(--border-default); border-radius:8px; width:100%; max-width:420px; padding:24px; margin:0 16px; box-shadow:0 24px 48px rgba(0,0,0,0.6);"
+           onclick="event.stopPropagation()">
+        <h3 style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:6px;">Docker Filter</h3>
+        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:20px; line-height:1.5;">
+          Show only containers matching keywords (partial match). Leave empty to show all.
+        </p>
+        <div id="filterTags" style="display:flex; flex-wrap:wrap; gap:6px; min-height:28px; margin-bottom:12px;"></div>
+        <div style="display:flex; gap:8px;">
+          <input id="filterInput" type="text" placeholder="Container name, then Enter"
+            style="flex:1; background:var(--bg-base); border:1px solid var(--border-default); border-radius:4px; padding:8px 12px; font-size:13px; color:var(--text-primary); outline:none; font-family:var(--font-sans);"
+            onfocus="this.style.borderColor='var(--border-focus)'"
+            onblur="this.style.borderColor='var(--border-default)'"
             onkeydown="if(event.key==='Enter') addFilterTag()" />
           <button onclick="addFilterTag()"
-            class="px-3 py-2 text-sm rounded-md bg-sky-700 hover:bg-sky-600 text-white transition">Add</button>
+            style="padding:8px 12px; font-size:11px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; border:1px solid var(--border-default); background:transparent; color:var(--text-secondary); border-radius:4px; cursor:pointer; transition:all 120ms ease;"
+            onmouseover="this.style.borderColor='var(--border-focus)'; this.style.color='var(--accent-text)';"
+            onmouseout="this.style.borderColor='var(--border-default)'; this.style.color='var(--text-secondary)';">Add</button>
         </div>
-        <div class="flex justify-end gap-2 mt-5">
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
           <button onclick="closeDockerSettings()"
-            class="px-4 py-2 text-sm rounded-md bg-card hover:bg-cardhi border border-edge text-slate-300 transition">Cancel</button>
+            style="padding:6px 14px; font-size:11px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; border:1px solid var(--border-default); background:transparent; color:var(--text-secondary); border-radius:4px; cursor:pointer; transition:all 120ms ease;"
+            onmouseover="this.style.color='var(--text-primary)'"
+            onmouseout="this.style.color='var(--text-secondary)'">Cancel</button>
           <button onclick="saveDockerFilter()"
-            class="px-4 py-2 text-sm rounded-md bg-emerald-700 hover:bg-emerald-600 text-white transition">Save</button>
+            style="padding:6px 14px; font-size:11px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; border:1px solid var(--accent-border); background:var(--accent-dim); color:var(--accent-text); border-radius:4px; cursor:pointer; transition:all 120ms ease;"
+            onmouseover="this.style.background='oklch(26% 0.06 65)'; this.style.borderColor='var(--accent)';"
+            onmouseout="this.style.background='var(--accent-dim)'; this.style.borderColor='var(--accent-border)';">Save</button>
         </div>
       </div>
     </div>
 
     <!-- VMware -->
-    <section class="mb-6">
-      <div class="bg-card border border-edge rounded-xl overflow-hidden">
-        <div class="px-5 py-3 border-b border-edge flex items-center justify-between">
-          <h2 class="font-medium text-white flex items-center gap-2">💻 VMware VMs</h2>
-          <span id="vmwareCount" class="text-xs text-slate-500"></span>
-        </div>
-        <div id="vmwareBody" class="divide-y divide-edge/60">
-          <div class="px-5 py-6 text-sm text-slate-500">Loading…</div>
-        </div>
+    <section class="mb-10">
+      <div class="flex items-baseline justify-between pb-1.5" style="border-bottom:1px solid var(--border-divider);">
+        <h2 style="font-size:11px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-muted);">VMware VMs</h2>
+        <span id="vmwareCount" style="font-size:10px; color:var(--text-muted);"></span>
+      </div>
+      <div id="vmwareBody">
+        <div style="padding:24px 0; font-size:12px; color:var(--text-muted);">Loading…</div>
       </div>
     </section>
 
-    <footer class="text-center text-xs text-slate-600 mt-8">
-      Auto-refresh every 10s · port 8765
+    <footer style="padding:24px 0; font-size:10px; color:var(--text-muted); letter-spacing:0.04em; text-align:center;">
+      Auto-refresh 10s · port 8765
     </footer>
   </div>
 
@@ -142,45 +210,85 @@
       }[c]));
     }
 
-    function badge(status) {
-      const running = status === "running";
-      const dot = `<span class="inline-block w-1.5 h-1.5 rounded-full ${running ? "bg-emerald-400" : "bg-rose-500"} mr-1 align-middle"></span>`;
-      const label = running ? "Running" : "Stopped";
-      const color = running ? "text-emerald-400" : "text-rose-400";
-      return `<span class="text-[11px] font-medium ${color} whitespace-nowrap">${dot}${label}</span>`;
+    // Status badge (inline text, no capsule)
+    function statusBadge(isRunning) {
+      const s = document.createElement("span");
+      s.textContent = isRunning ? "● RUN" : "○ OFF";
+      s.style.cssText = `
+        font-size:10px; font-weight:500; letter-spacing:0.08em;
+        color:${isRunning ? "var(--status-running-text)" : "var(--status-stopped-text)"};
+        white-space:nowrap; flex-shrink:0;
+      `;
+      return s;
     }
 
+    // Toast (bottom-right, 2px bar, no emoji)
     function toast(message, ok = true) {
       const wrap = document.getElementById("toasts");
-      const t = el("div",
-        `toast-in px-4 py-3 rounded-lg shadow-lg text-sm border ${
-          ok ? "bg-emerald-950 border-emerald-700 text-emerald-200"
-             : "bg-rose-950 border-rose-700 text-rose-200"}`,
-        `${ok ? "✓" : "✕"} ${esc(message)}`);
+      const t = document.createElement("div");
+      t.style.cssText = `
+        display:flex; align-items:stretch; gap:12px;
+        background:var(--bg-modal); border:1px solid var(--border-default);
+        border-radius:4px; padding:10px 14px 10px 16px; width:280px;
+        box-shadow:0 8px 24px rgba(0,0,0,0.5);
+        animation:toastIn 0.2s ease-out;
+        font-size:13px; color:var(--text-primary);
+        font-family:var(--font-sans);
+      `;
+      const bar = document.createElement("div");
+      bar.style.cssText = `
+        width:2px; border-radius:1px; flex-shrink:0;
+        background:${ok ? "var(--status-running)" : "oklch(52% 0.18 22)"};
+      `;
+      const msg = document.createElement("span");
+      msg.style.cssText = "line-height:1.4; flex:1;";
+      msg.textContent = message;
+      t.appendChild(bar);
+      t.appendChild(msg);
       wrap.appendChild(t);
-      setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .3s"; }, 3200);
-      setTimeout(() => t.remove(), 3600);
+      setTimeout(() => { t.style.transition = "opacity 0.4s"; t.style.opacity = "0"; }, 3500);
+      setTimeout(() => t.remove(), 3950);
     }
 
+    // Ghost button
     function btn(label, kind, onClick) {
-      const palette = kind === "start"
-        ? "bg-emerald-800/70 hover:bg-emerald-700 border-emerald-700 text-emerald-200"
-        : kind === "shell"
-        ? "bg-sky-900/70 hover:bg-sky-800 border-sky-700 text-sky-200"
-        : "bg-rose-900/70 hover:bg-rose-800 border-rose-700 text-rose-200";
-      const b = el("button",
-        `w-full px-2 py-1 text-xs rounded border ${palette} transition disabled:opacity-40 disabled:cursor-not-allowed text-center leading-tight`,
-        label);
+      const b = document.createElement("button");
+      const hoverStyles = {
+        start: { border: "var(--status-running)", color: "var(--status-running-text)", bg: "var(--status-running-bg)" },
+        stop:  { border: "oklch(52% 0.18 22)",    color: "oklch(62% 0.18 22)",         bg: "oklch(12% 0.06 22)" },
+        shell: { border: "var(--accent)",          color: "var(--accent-text)",          bg: "var(--accent-dim)" },
+      };
+      const h = hoverStyles[kind] || hoverStyles.start;
+      b.textContent = label;
       b.dataset.label = label;
+      b.style.cssText = `
+        width:100%; height:26px; border:1px solid var(--border-default);
+        background:transparent; color:var(--text-secondary);
+        font-family:var(--font-sans); font-size:10px; font-weight:500;
+        letter-spacing:0.06em; text-transform:uppercase;
+        border-radius:3px; cursor:pointer; transition:all 120ms ease;
+        white-space:nowrap;
+      `;
+      b.onmouseenter = () => {
+        if (b.disabled) return;
+        b.style.borderColor = h.border;
+        b.style.color = h.color;
+        b.style.backgroundColor = h.bg;
+      };
+      b.onmouseleave = () => {
+        b.style.borderColor = "var(--border-default)";
+        b.style.color = "var(--text-secondary)";
+        b.style.backgroundColor = "transparent";
+      };
       b.onclick = () => onClick(b);
       return b;
     }
 
     async function action(b, url, body) {
       const all = b.parentElement.querySelectorAll("button");
-      all.forEach((x) => (x.disabled = true));
+      all.forEach((x) => { x.disabled = true; x.style.opacity = "0.4"; x.style.cursor = "not-allowed"; });
       const original = b.innerHTML;
-      b.innerHTML = '<span class="spinner"></span>';
+      b.innerHTML = '<svg class="spinner" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="14 8" stroke-linecap="round"/></svg>';
       try {
         const opts = { method: "POST" };
         if (body) {
@@ -196,24 +304,82 @@
         toast(e.message || "Request failed", false);
       } finally {
         b.innerHTML = original;
-        all.forEach((x) => (x.disabled = false));
+        all.forEach((x) => { x.disabled = false; x.style.opacity = ""; x.style.cursor = "pointer"; });
         setTimeout(refreshAll, 600);
       }
     }
 
-    function row(cells, actions) {
-      const r = el("div", "px-5 py-3 flex items-center gap-4 hover:bg-white/[.03] transition-colors duration-150 border-l-2 border-transparent hover:border-slate-600");
-      const main = el("div", "flex-1 min-w-0 overflow-hidden");
-      main.append(...cells);
-      r.appendChild(main);
-      const act = el("div", "flex flex-col gap-1 shrink-0 w-[72px]");
-      actions.forEach((a) => act.appendChild(a));
-      r.appendChild(act);
+    // Row factory — 2px status bar + content + actions
+    function row(isRunning, cells, actionBtns) {
+      const r = document.createElement("div");
+      r.style.cssText = `
+        display:flex; align-items:stretch;
+        border-bottom:1px solid var(--border-divider);
+        transition:background-color 120ms ease;
+        cursor:default; min-height:48px;
+      `;
+      r.onmouseenter = () => r.style.backgroundColor = "var(--bg-surface-hi)";
+      r.onmouseleave = () => r.style.backgroundColor = "";
+
+      // Left status bar (2px)
+      const bar = document.createElement("div");
+      bar.style.cssText = `
+        width:2px; flex-shrink:0; align-self:stretch;
+        background:${isRunning ? "var(--status-running)" : "var(--border-divider)"};
+        transition:background-color 120ms ease;
+        opacity:${isRunning ? "0.9" : "0.4"};
+      `;
+      r.appendChild(bar);
+
+      // Content
+      const content = document.createElement("div");
+      content.style.cssText = "flex:1; min-width:0; padding:10px 0 10px 14px; overflow:hidden;";
+      cells.forEach(c => content.appendChild(c));
+      r.appendChild(content);
+
+      // Actions
+      const actions = document.createElement("div");
+      actions.style.cssText = "display:flex; flex-direction:column; gap:4px; padding:10px 16px 10px 12px; width:84px; flex-shrink:0; justify-content:center;";
+      actionBtns.forEach(b => actions.appendChild(b));
+      r.appendChild(actions);
+
       return r;
     }
 
+    // ---------- cell builders ----------
+    // Line 1: name + status badge
+    function nameLine(name, isRunning) {
+      const line1 = document.createElement("div");
+      line1.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:8px;";
+      const n = document.createElement("span");
+      n.textContent = name;
+      n.style.cssText = "font-size:14px; font-weight:600; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+      line1.appendChild(n);
+      line1.appendChild(statusBadge(isRunning));
+      return line1;
+    }
+
+    // Secondary description line (12px --text-secondary)
+    function descLine(text) {
+      const d = document.createElement("div");
+      d.textContent = text;
+      d.style.cssText = "font-size:12px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; line-height:1.4;";
+      return d;
+    }
+
+    // Tertiary mono metadata line (10px --text-muted)
+    function monoLine(text, accent) {
+      const m = document.createElement("div");
+      m.textContent = text;
+      m.style.cssText = `font-size:10px; font-family:var(--font-mono); color:${accent ? "var(--accent-text)" : "var(--text-muted)"}; letter-spacing:0.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;`;
+      return m;
+    }
+
     function emptyRow(text) {
-      return el("div", "px-5 py-6 text-sm text-slate-500", esc(text));
+      const e = document.createElement("div");
+      e.textContent = text;
+      e.style.cssText = "padding:24px 0; font-size:12px; color:var(--text-muted);";
+      return e;
     }
 
     // ---------- renderers ----------
@@ -224,20 +390,18 @@
       if (!apps.length) { body.appendChild(emptyRow("No apps in registry.")); return; }
       apps.forEach((a) => {
         const running = a.status === "running";
-        const title = el("div", "flex items-center gap-2 min-w-0",
-          `<span class="font-semibold text-white text-sm truncate">${esc(a.name)}</span>${badge(a.status)}`);
-        const desc = el("div", "text-xs text-slate-400 truncate mt-0.5 leading-snug", esc(a.description || "—"));
-        const meta = el("div", "text-[10px] text-slate-600 truncate mt-1 font-mono", esc(a.runCmd || ""));
+        const cells = [nameLine(a.name, running), descLine(a.description || "—")];
+        if (a.runCmd) cells.push(monoLine(a.runCmd));
         const btns = [];
         if (a.runCmd) {
           btns.push(running
-            ? btn("■ Stop", "stop", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/stop`))
-            : btn("▶ Start", "start", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/start`)));
+            ? btn("Stop", "stop", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/stop`))
+            : btn("Start", "start", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/start`)));
         }
         if (a.localPath) {
-          btns.push(btn("⌨ Claude", "shell", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/shell`)));
+          btns.push(btn("Claude", "shell", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/shell`)));
         }
-        body.appendChild(row([title, desc, meta], btns));
+        body.appendChild(row(running, cells, btns));
       });
     }
 
@@ -268,16 +432,17 @@
       }
       list.forEach((c) => {
         const running = c.status === "running";
-        const title = el("div", "flex items-center gap-2 min-w-0",
-          `<span class="font-semibold text-white text-sm truncate">${esc(c.name)}</span>${badge(c.status)}`);
-        const img = el("div", "text-[11px] text-slate-500 truncate mt-0.5 font-mono", esc(c.image || ""));
-        const ports = c.ports
-          ? el("div", "text-[10px] text-sky-600 truncate mt-0.5 font-mono", esc(c.ports))
-          : el("div", "text-[10px] text-slate-600 truncate mt-0.5", esc(c.statusText || ""));
+        const cells = [nameLine(c.name, running)];
+        if (c.image) cells.push(descLine(c.image));
+        if (c.ports) {
+          cells.push(monoLine(c.ports, true));
+        } else if (c.statusText) {
+          cells.push(monoLine(c.statusText));
+        }
         const toggleBtn = running
-          ? btn("■ Stop", "stop", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/stop`))
-          : btn("▶ Start", "start", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/start`));
-        body.appendChild(row([title, img, ports], [toggleBtn]));
+          ? btn("Stop", "stop", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/stop`))
+          : btn("Start", "start", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/start`));
+        body.appendChild(row(running, cells, [toggleBtn]));
       });
     }
 
@@ -302,13 +467,25 @@
       const wrap = document.getElementById("filterTags");
       wrap.innerHTML = "";
       _filterTags.forEach((tag, i) => {
-        const t = el("span",
-          "flex items-center gap-1 px-2 py-1 rounded-full bg-sky-900/50 border border-sky-700/50 text-sky-300 text-xs",
-          `${esc(tag)} <button onclick="removeTag(${i})" class="hover:text-white leading-none">✕</button>`);
+        const t = document.createElement("span");
+        t.style.cssText = "display:inline-flex; align-items:center; gap:6px; background:transparent; border:1px solid var(--border-default); border-radius:3px; padding:2px 8px; font-size:11px; color:var(--text-secondary);";
+        const label = document.createElement("span");
+        label.textContent = tag;
+        const rm = document.createElement("button");
+        rm.textContent = "✕";
+        rm.style.cssText = "background:none; border:none; color:var(--text-muted); cursor:pointer; line-height:1; font-size:11px; padding:0; transition:color 120ms ease;";
+        rm.onmouseover = () => rm.style.color = "var(--text-primary)";
+        rm.onmouseout = () => rm.style.color = "var(--text-muted)";
+        rm.onclick = () => removeTag(i);
+        t.appendChild(label);
+        t.appendChild(rm);
         wrap.appendChild(t);
       });
       if (!_filterTags.length) {
-        wrap.appendChild(el("span", "text-xs text-slate-500 italic", "แสดงทุก container"));
+        const empty = document.createElement("span");
+        empty.textContent = "Showing all containers";
+        empty.style.cssText = "font-size:11px; color:var(--text-muted); font-style:italic;";
+        wrap.appendChild(empty);
       }
     }
 
@@ -363,13 +540,12 @@
       if (!list.length) { body.appendChild(emptyRow("No running VMs.")); return; }
       list.forEach((vm) => {
         const running = vm.status === "running";
-        const title = el("div", "flex items-center gap-2 min-w-0",
-          `<span class="font-semibold text-white text-sm truncate">${esc(vm.name)}</span>${badge(vm.status)}`);
-        const path = el("div", "text-[10px] text-slate-600 truncate mt-0.5 font-mono", esc(vm.vmx));
+        const cells = [nameLine(vm.name, running)];
+        if (vm.vmx) cells.push(monoLine(vm.vmx));
         const toggleBtn = running
-          ? btn("■ Stop", "stop", (b) => action(b, "/api/vmware/stop", { vmx: vm.vmx, force: false }))
-          : btn("▶ Start", "start", (b) => action(b, "/api/vmware/start", { vmx: vm.vmx, gui: false }));
-        body.appendChild(row([title, path], [toggleBtn]));
+          ? btn("Stop", "stop", (b) => action(b, "/api/vmware/stop", { vmx: vm.vmx, force: false }))
+          : btn("Start", "start", (b) => action(b, "/api/vmware/start", { vmx: vm.vmx, gui: false }));
+        body.appendChild(row(running, cells, [toggleBtn]));
       });
     }
 
