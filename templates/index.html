@@ -73,6 +73,11 @@
     .spinner { animation: spin 0.7s linear infinite; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    @keyframes pulse {
+      0%, 100% { opacity: 0.9; }
+      50%       { opacity: 0.25; }
+    }
+
     @keyframes toastIn {
       from { opacity: 0; transform: translateX(12px); }
       to   { opacity: 1; transform: translateX(0); }
@@ -106,7 +111,7 @@
           style="width:28px; height:28px; border:1px solid var(--border-default); border-radius:4px; background:transparent; color:var(--text-secondary); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:border-color 120ms ease;"
           onmouseover="this.style.borderColor='var(--border-focus)'"
           onmouseout="this.style.borderColor='var(--border-default)'">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg id="refreshIcon" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M10.5 6A4.5 4.5 0 1 1 8 2.1"/>
             <polyline points="8,1 8,3 10,3"/>
           </svg>
@@ -134,10 +139,11 @@
         </h2>
         <div class="flex items-center gap-3">
           <span id="dockerCount" style="font-size:10px; color:var(--text-muted);"></span>
+          <!-- #11: ghost chip border so "Filter" reads as clickable -->
           <button onclick="openDockerSettings()" title="Filter"
-            style="font-size:10px; color:var(--text-muted); background:none; border:none; cursor:pointer; letter-spacing:0.06em; text-transform:uppercase; transition:color 120ms ease;"
-            onmouseover="this.style.color='var(--text-secondary)'"
-            onmouseout="this.style.color='var(--text-muted)'">Filter</button>
+            style="font-size:10px; color:var(--text-muted); background:none; border:1px solid var(--border-default); border-radius:3px; padding:2px 8px; cursor:pointer; letter-spacing:0.06em; text-transform:uppercase; transition:all 120ms ease;"
+            onmouseover="this.style.borderColor='var(--border-focus)'; this.style.color='var(--text-secondary)';"
+            onmouseout="this.style.borderColor='var(--border-default)'; this.style.color='var(--text-muted)';">Filter</button>
         </div>
       </div>
       <div id="dockerBody">
@@ -180,7 +186,7 @@
     </div>
 
     <!-- VMware -->
-    <section class="mb-10">
+    <section class="mb-16">
       <div class="flex items-baseline justify-between pb-1.5" style="border-bottom:1px solid var(--border-divider);">
         <h2 style="font-size:11px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-muted);">VMware VMs</h2>
         <span id="vmwareCount" style="font-size:10px; color:var(--text-muted);"></span>
@@ -190,9 +196,8 @@
       </div>
     </section>
 
-    <footer style="padding:24px 0; font-size:10px; color:var(--text-muted); letter-spacing:0.04em; text-align:center;">
-      Auto-refresh 10s · port 8765
-    </footer>
+    <!-- #15: footer removed -->
+
   </div>
 
   <script>
@@ -222,7 +227,7 @@
       return s;
     }
 
-    // Toast (bottom-right, 2px bar, no emoji)
+    // Toast — #10: collapse height on exit so stacked toasts don't jump
     function toast(message, ok = true) {
       const wrap = document.getElementById("toasts");
       const t = document.createElement("div");
@@ -234,6 +239,7 @@
         animation:toastIn 0.2s ease-out;
         font-size:13px; color:var(--text-primary);
         font-family:var(--font-sans);
+        max-height:80px; overflow:hidden;
       `;
       const bar = document.createElement("div");
       bar.style.cssText = `
@@ -246,23 +252,29 @@
       t.appendChild(bar);
       t.appendChild(msg);
       wrap.appendChild(t);
-      setTimeout(() => { t.style.transition = "opacity 0.4s"; t.style.opacity = "0"; }, 3500);
-      setTimeout(() => t.remove(), 3950);
+      setTimeout(() => {
+        t.style.transition = "opacity 0.35s, max-height 0.4s 0.15s, padding-top 0.4s 0.15s, padding-bottom 0.4s 0.15s";
+        t.style.opacity = "0";
+        t.style.maxHeight = "0";
+        t.style.paddingTop = "0";
+        t.style.paddingBottom = "0";
+      }, 3500);
+      setTimeout(() => t.remove(), 4200);
     }
 
-    // Ghost button
+    // Ghost button — #2: height reduced to 24px
     function btn(label, kind, onClick) {
       const b = document.createElement("button");
       const hoverStyles = {
-        start: { border: "var(--status-running)", color: "var(--status-running-text)", bg: "var(--status-running-bg)" },
-        stop:  { border: "oklch(52% 0.18 22)",    color: "oklch(62% 0.18 22)",         bg: "oklch(12% 0.06 22)" },
-        shell: { border: "var(--accent)",          color: "var(--accent-text)",          bg: "var(--accent-dim)" },
+        start:   { border: "var(--status-running)", color: "var(--status-running-text)", bg: "var(--status-running-bg)" },
+        stop:    { border: "oklch(52% 0.18 22)",    color: "oklch(62% 0.18 22)",         bg: "oklch(12% 0.06 22)" },
+        shell:   { border: "var(--accent)",          color: "var(--accent-text)",          bg: "var(--accent-dim)" },
       };
       const h = hoverStyles[kind] || hoverStyles.start;
       b.textContent = label;
       b.dataset.label = label;
       b.style.cssText = `
-        width:100%; height:26px; border:1px solid var(--border-default);
+        width:100%; height:24px; border:1px solid var(--border-default);
         background:transparent; color:var(--text-secondary);
         font-family:var(--font-sans); font-size:10px; font-weight:500;
         letter-spacing:0.06em; text-transform:uppercase;
@@ -284,7 +296,8 @@
       return b;
     }
 
-    async function action(b, url, body, postDelay = 600, silentRefresh = false) {
+    // action() — #1: pendingLabel keeps button in "Restarting…" state during postDelay
+    async function action(b, url, body, postDelay = 600, silentRefresh = false, pendingLabel = null) {
       const all = b.parentElement.querySelectorAll("button");
       all.forEach((x) => { x.disabled = true; x.style.opacity = "0.4"; x.style.cursor = "not-allowed"; });
       const original = b.innerHTML;
@@ -303,32 +316,55 @@
       } catch (e) {
         toast(e.message || "Request failed", false);
       } finally {
-        b.innerHTML = original;
-        all.forEach((x) => { x.disabled = false; x.style.opacity = ""; x.style.cursor = "pointer"; });
-        setTimeout(() => refreshAll(silentRefresh), postDelay);
+        if (pendingLabel) {
+          // Keep this button in a "pending" disabled state; re-enable others
+          b.textContent = pendingLabel;
+          b.style.opacity = "0.5";
+          b.style.cursor = "not-allowed";
+          b.style.color = "var(--status-running-text)";
+          b.style.borderColor = "var(--accent-border)";
+          all.forEach((x) => { if (x !== b) { x.disabled = false; x.style.opacity = ""; x.style.cursor = "pointer"; } });
+          setTimeout(() => {
+            b.innerHTML = original;
+            b.disabled = false;
+            b.style.opacity = "";
+            b.style.cursor = "pointer";
+            b.style.color = "var(--text-secondary)";
+            b.style.borderColor = "var(--border-default)";
+            refreshAll(silentRefresh);
+          }, postDelay);
+        } else {
+          b.innerHTML = original;
+          all.forEach((x) => { x.disabled = false; x.style.opacity = ""; x.style.cursor = "pointer"; });
+          setTimeout(() => refreshAll(silentRefresh), postDelay);
+        }
       }
     }
 
-    // Row factory — 2px status bar + content + actions
+    // Row factory — #2: action column 96px; #8: non-monitorable bar uses width:0
     function row(isRunning, cells, actionBtns, monitorable = true) {
       const r = document.createElement("div");
       r.style.cssText = `
         display:flex; align-items:stretch;
         border-bottom:1px solid var(--border-divider);
         transition:background-color 120ms ease;
-        cursor:default; min-height:48px;
+        cursor:default; min-height:44px;
       `;
       r.onmouseenter = () => r.style.backgroundColor = "var(--bg-surface-hi)";
       r.onmouseleave = () => r.style.backgroundColor = "";
 
-      // Left status bar (2px) — hidden when not monitorable
+      // Left status bar — #8: width:0 for non-monitorable (no phantom space)
       const bar = document.createElement("div");
-      bar.style.cssText = `
-        width:2px; flex-shrink:0; align-self:stretch;
-        background:${(!monitorable) ? "transparent" : isRunning ? "var(--status-running)" : "var(--border-divider)"};
-        transition:background-color 120ms ease;
-        opacity:${(!monitorable) ? "0" : isRunning ? "0.9" : "0.4"};
-      `;
+      if (monitorable) {
+        bar.style.cssText = `
+          width:2px; flex-shrink:0; align-self:stretch;
+          background:${isRunning ? "var(--status-running)" : "var(--border-divider)"};
+          transition:background-color 120ms ease;
+          opacity:${isRunning ? "0.9" : "0.4"};
+        `;
+      } else {
+        bar.style.cssText = "width:0; flex-shrink:0;";
+      }
       r.appendChild(bar);
 
       // Content
@@ -337,9 +373,9 @@
       cells.forEach(c => content.appendChild(c));
       r.appendChild(content);
 
-      // Actions
+      // Actions — #2: 96px wide
       const actions = document.createElement("div");
-      actions.style.cssText = "display:flex; flex-direction:column; gap:4px; padding:10px 16px 10px 12px; width:84px; flex-shrink:0; justify-content:center;";
+      actions.style.cssText = "display:flex; flex-direction:column; gap:4px; padding:10px 16px 10px 12px; width:96px; flex-shrink:0; justify-content:center;";
       actionBtns.forEach(b => actions.appendChild(b));
       r.appendChild(actions);
 
@@ -347,7 +383,7 @@
     }
 
     // ---------- cell builders ----------
-    // Line 1: name + optional status badge (omitted when not monitorable)
+    // Line 1: name + optional status badge
     function nameLine(name, isRunning, monitorable = true) {
       const line1 = document.createElement("div");
       line1.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:8px;";
@@ -359,7 +395,7 @@
       return line1;
     }
 
-    // Secondary description line (12px --text-secondary)
+    // Secondary description line
     function descLine(text) {
       const d = document.createElement("div");
       d.textContent = text;
@@ -367,11 +403,14 @@
       return d;
     }
 
-    // Tertiary mono metadata line (10px --text-muted)
-    function monoLine(text, accent) {
+    // Tertiary mono metadata line — color accepts bool (accent) or CSS string
+    function monoLine(text, color) {
       const m = document.createElement("div");
       m.textContent = text;
-      m.style.cssText = `font-size:10px; font-family:var(--font-mono); color:${accent ? "var(--accent-text)" : "var(--text-muted)"}; letter-spacing:0.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;`;
+      const c = !color ? "var(--text-muted)"
+               : color === true ? "var(--accent-text)"
+               : color;
+      m.style.cssText = `font-size:10px; font-family:var(--font-mono); color:${c}; letter-spacing:0.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;`;
       return m;
     }
 
@@ -395,14 +434,16 @@
         const enc = encodeURIComponent(a.name);
         const cells = [nameLine(a.name, running, mon), descLine(a.description || "—")];
         if (a.runCmd) cells.push(monoLine(a.runCmd));
-        if (n > 0) cells.push(monoLine(`claude  ×${n}`, true));
+        // #9: claude sessions line uses text-secondary (not accent) to avoid diluting accent
+        if (n > 0) cells.push(monoLine(`claude  ×${n}`, "var(--text-secondary)"));
         const btns = [];
         if (a.runCmd) {
           btns.push(running
             ? btn("Stop",    "stop",  (b) => action(b, `/api/apps/${enc}/stop`))
             : btn("Start",   "start", (b) => action(b, `/api/apps/${enc}/start`)));
+          // #1: Restart shows "Restarting…" label during 5s wait
           if (running) {
-            btns.push(btn("Restart", "start", (b) => action(b, `/api/apps/${enc}/restart`, undefined, 5000, true)));
+            btns.push(btn("Restart", "start", (b) => action(b, `/api/apps/${enc}/restart`, undefined, 5000, true, "Restarting…")));
           }
         }
         if (n > 0) {
@@ -450,7 +491,7 @@
           cells.push(monoLine(c.statusText));
         }
         const toggleBtn = running
-          ? btn("Stop", "stop", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/stop`))
+          ? btn("Stop",  "stop",  (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/stop`))
           : btn("Start", "start", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/start`));
         body.appendChild(row(running, cells, [toggleBtn]));
       });
@@ -553,34 +594,43 @@
         const cells = [nameLine(vm.name, running)];
         if (vm.vmx) cells.push(monoLine(vm.vmx));
         const toggleBtn = running
-          ? btn("Stop", "stop", (b) => action(b, "/api/vmware/stop", { vmx: vm.vmx, force: false }))
+          ? btn("Stop",  "stop",  (b) => action(b, "/api/vmware/stop",  { vmx: vm.vmx, force: false }))
           : btn("Start", "start", (b) => action(b, "/api/vmware/start", { vmx: vm.vmx, gui: false }));
         body.appendChild(row(running, cells, [toggleBtn]));
       });
     }
 
-    // ---------- refresh ----------
+    // ---------- refresh — #3: spin icon; #12: HH:MM only ----------
     let inFlight = false;
     async function refreshAll(silent = false) {
       if (inFlight) return;
       inFlight = true;
       const rb = document.getElementById("refreshBtn");
+      const icon = document.getElementById("refreshIcon");
       rb.disabled = true;
+      icon.style.animation = "spin 0.7s linear infinite"; // #3
       try {
         const res = await fetch("/api/status");
         const data = await res.json();
         renderVeda(data.veda || []);
         renderDocker(data.docker);
         renderVmware(data.vmware);
+        // #12: HH:MM without seconds
         document.getElementById("lastUpdated").textContent =
-          "updated " + new Date().toLocaleTimeString();
+          "updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       } catch (e) {
         if (!silent) toast("Failed to load status: " + (e.message || e), false);
       } finally {
+        icon.style.animation = ""; // #3: stop spin
         rb.disabled = false;
         inFlight = false;
       }
     }
+
+    // #13: Escape closes Docker modal
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeDockerSettings();
+    });
 
     refreshAll();
     setInterval(refreshAll, 10000);
