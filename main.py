@@ -331,6 +331,46 @@ async def vmware_stop(payload: dict[str, Any]) -> JSONResponse:
 
 
 # ----------------------------------------------------------------------------
+# Claude remote-control sessions
+# ----------------------------------------------------------------------------
+
+def _find_claude_sessions() -> list[dict[str, Any]]:
+    """Return one entry per PowerShell terminal running claude remote-control."""
+    results = []
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+        try:
+            name = (proc.info.get("name") or "").lower().replace(".exe", "")
+            if name not in ("powershell", "pwsh"):
+                continue
+            cmdline = " ".join(str(c) for c in (proc.info.get("cmdline") or []))
+            if "remote-control" in cmdline and "claude" in cmdline.lower():
+                results.append({"pid": proc.pid})
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return results
+
+
+@app.get("/api/claude-sessions")
+async def claude_sessions_list() -> dict[str, Any]:
+    sessions = _find_claude_sessions()
+    return {"count": len(sessions), "sessions": sessions}
+
+
+@app.post("/api/claude-sessions/kill-all")
+async def claude_sessions_kill_all() -> JSONResponse:
+    sessions = _find_claude_sessions()
+    killed = 0
+    for s in sessions:
+        try:
+            psutil.Process(s["pid"]).terminate()
+            killed += 1
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    msg = f"terminated {killed} session(s)" if killed else "no sessions found"
+    return JSONResponse({"ok": True, "killed": killed, "message": msg})
+
+
+# ----------------------------------------------------------------------------
 # Helpers for stopping Veda apps
 # ----------------------------------------------------------------------------
 def _port_from_healthcheck(hc: dict[str, Any]) -> int | None:

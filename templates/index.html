@@ -101,6 +101,13 @@
         <h1 style="font-size:22px; font-weight:600; color:var(--text-primary); line-height:1;">Dashboard</h1>
       </div>
       <div class="flex items-center gap-4">
+        <div id="claudeBar" style="display:none; align-items:center; gap:8px;">
+          <span id="claudeCount" style="font-size:10px; font-weight:500; letter-spacing:0.06em; color:var(--accent-text);"></span>
+          <button id="killClaudeBtn" onclick="killAllClaude()"
+            style="height:22px; padding:0 8px; border:1px solid var(--border-default); border-radius:3px; background:transparent; color:var(--text-secondary); font-family:var(--font-sans); font-size:10px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; cursor:pointer; transition:all 120ms ease;"
+            onmouseover="this.style.borderColor='oklch(52% 0.18 22)'; this.style.color='oklch(62% 0.18 22)'; this.style.backgroundColor='oklch(12% 0.06 22)';"
+            onmouseout="this.style.borderColor='var(--border-default)'; this.style.color='var(--text-secondary)'; this.style.backgroundColor='transparent';">Kill All</button>
+        </div>
         <span id="lastUpdated" style="font-size:10px; color:var(--text-muted); letter-spacing:0.04em;"></span>
         <button id="refreshBtn" onclick="refreshAll()" title="Refresh"
           style="width:28px; height:28px; border:1px solid var(--border-default); border-radius:4px; background:transparent; color:var(--text-secondary); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:border-color 120ms ease;"
@@ -553,6 +560,35 @@
       });
     }
 
+    // ---------- Claude sessions ----------
+    function renderClaudeSessions(data) {
+      const bar = document.getElementById("claudeBar");
+      const count = document.getElementById("claudeCount");
+      if (data && data.count > 0) {
+        count.textContent = `claude  ×${data.count}`;
+        bar.style.display = "flex";
+      } else {
+        bar.style.display = "none";
+      }
+    }
+
+    async function killAllClaude() {
+      const b = document.getElementById("killClaudeBtn");
+      b.disabled = true;
+      b.style.opacity = "0.4";
+      try {
+        const res = await fetch("/api/claude-sessions/kill-all", { method: "POST" });
+        const data = await res.json();
+        toast(data.message || "Done", data.ok !== false);
+        setTimeout(() => fetch("/api/claude-sessions").then(r => r.json()).then(renderClaudeSessions), 600);
+      } catch (e) {
+        toast(e.message || "Request failed", false);
+      } finally {
+        b.disabled = false;
+        b.style.opacity = "";
+      }
+    }
+
     // ---------- refresh ----------
     let inFlight = false;
     async function refreshAll() {
@@ -561,11 +597,16 @@
       const rb = document.getElementById("refreshBtn");
       rb.disabled = true;
       try {
-        const res = await fetch("/api/status");
-        const data = await res.json();
+        const [statusRes, sessionRes] = await Promise.all([
+          fetch("/api/status"),
+          fetch("/api/claude-sessions"),
+        ]);
+        const data = await statusRes.json();
+        const sessions = await sessionRes.json();
         renderVeda(data.veda || []);
         renderDocker(data.docker);
         renderVmware(data.vmware);
+        renderClaudeSessions(sessions);
         document.getElementById("lastUpdated").textContent =
           "updated " + new Date().toLocaleTimeString();
       } catch (e) {
