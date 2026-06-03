@@ -398,6 +398,9 @@
           btns.push(running
             ? btn("Stop", "stop", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/stop`))
             : btn("Start", "start", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/start`)));
+          if (running) {
+            btns.push(btn("Restart", "start", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/restart`)));
+          }
         }
         if (a.localPath) {
           btns.push(btn("Claude", "shell", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/shell`)));

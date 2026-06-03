@@ -50,6 +50,12 @@ try:
 except AttributeError:
     _NO_WINDOW = 0
 
+_NEW_GROUP = 0
+try:
+    _NEW_GROUP = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+except AttributeError:
+    _NEW_GROUP = 0
+
 
 # ----------------------------------------------------------------------------
 # Page
@@ -147,6 +153,88 @@ async def app_start(name: str) -> JSONResponse:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
 
     return JSONResponse({"ok": True, "message": f"started {name}"})
+
+
+@app.post("/api/apps/{name}/restart")
+async def app_restart(name: str) -> JSONResponse:
+    entry = veda_apps.get_app(name)
+    if not entry:
+        return JSONResponse({"ok": False, "error": f"unknown app: {name}"}, status_code=404)
+
+    run_cmd = entry.get("runCmd")
+    if not run_cmd:
+        return JSONResponse({"ok": False, "error": "no runCmd configured"}, status_code=400)
+
+    hc = entry.get("healthCheck") or {}
+    port: int | None = _port_from_healthcheck(hc) or _port_from_cmd(run_cmd)
+    token: str | None = None if port else _first_token(run_cmd)
+    cwd: str | None = entry.get("localPath") or None
+
+    # Spawn a detached Python process that does stop → wait → start.
+    # Detached so it survives even when this server process is the one being restarted.
+    script = _build_restart_script(port, token, run_cmd, cwd)
+    try:
+        subprocess.Popen(
+            ["python", "-c", script],
+            creationflags=_NO_WINDOW | _NEW_GROUP,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+        )
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+    return JSONResponse({"ok": True, "message": f"restarting {name}…"})
+
+
+def _build_restart_script(port: int | None, token: str | None, run_cmd: str, cwd: str | None) -> str:
+    return f"""
+import time, subprocess, socket, shlex
+import psutil
+
+time.sleep(0.7)
+
+port = {port!r}
+token = {token!r}
+run_cmd = {run_cmd!r}
+cwd = {cwd!r}
+
+if port:
+    for conn in psutil.net_connections(kind='inet'):
+        if conn.laddr and conn.laddr.port == port and conn.pid:
+            try: psutil.Process(conn.pid).terminate()
+            except: pass
+else:
+    needle = (token or '').lower()
+    for proc in psutil.process_iter(['name']):
+        try:
+            pname = (proc.info.get('name') or '').lower()
+            if pname.endswith('.exe'): pname = pname[:-4]
+            if pname == needle: proc.terminate()
+        except: pass
+
+if port:
+    for _ in range(30):
+        time.sleep(0.25)
+        s = socket.socket()
+        s.settimeout(0.5)
+        try:
+            if s.connect_ex(('localhost', port)) != 0:
+                break
+        finally:
+            s.close()
+else:
+    time.sleep(1.0)
+
+try:
+    args = shlex.split(run_cmd, posix=False)
+except Exception:
+    args = run_cmd.split()
+try:
+    subprocess.Popen(args, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+except FileNotFoundError:
+    subprocess.Popen(run_cmd, cwd=cwd, shell=True)
+"""
 
 
 @app.post("/api/apps/{name}/shell")
