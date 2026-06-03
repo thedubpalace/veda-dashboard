@@ -131,12 +131,7 @@ def _is_running(app: dict[str, Any]) -> bool:
 
 
 def _is_monitorable(app: dict[str, Any]) -> bool:
-    """Return True if the app has any mechanism to check whether it is running."""
-    hc = app.get("healthCheck") or {}
-    hc_type = (hc.get("type") or "null").lower()
-    target = hc.get("target")
-    if hc_type in ("http", "port", "process") and target:
-        return True
+    """Return True only when the app can be started/stopped from the dashboard."""
     return bool(app.get("runCmd"))
 
 
