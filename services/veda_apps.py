@@ -130,16 +130,28 @@ def _is_running(app: dict[str, Any]) -> bool:
     return _check_process(_first_cmd_token(app.get("runCmd")))
 
 
+def _is_monitorable(app: dict[str, Any]) -> bool:
+    """Return True if the app has any mechanism to check whether it is running."""
+    hc = app.get("healthCheck") or {}
+    hc_type = (hc.get("type") or "null").lower()
+    target = hc.get("target")
+    if hc_type in ("http", "port", "process") and target:
+        return True
+    return bool(app.get("runCmd"))
+
+
 def list_apps() -> list[dict[str, Any]]:
-    """Return registry apps enriched with a live `status` field."""
+    """Return registry apps enriched with live `status` and `monitorable` fields."""
     apps: list[dict[str, Any]] = []
     for app in _load_registry():
-        running = _is_running(app)
+        monitorable = _is_monitorable(app)
+        running = _is_running(app) if monitorable else False
         apps.append(
             {
                 "name": app.get("name"),
                 "description": app.get("description"),
                 "status": "running" if running else "stopped",
+                "monitorable": monitorable,
                 "runCmd": app.get("runCmd"),
                 "repo": app.get("repo"),
                 "localPath": app.get("localPath"),

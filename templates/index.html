@@ -310,7 +310,7 @@
     }
 
     // Row factory — 2px status bar + content + actions
-    function row(isRunning, cells, actionBtns) {
+    function row(isRunning, cells, actionBtns, monitorable = true) {
       const r = document.createElement("div");
       r.style.cssText = `
         display:flex; align-items:stretch;
@@ -321,13 +321,13 @@
       r.onmouseenter = () => r.style.backgroundColor = "var(--bg-surface-hi)";
       r.onmouseleave = () => r.style.backgroundColor = "";
 
-      // Left status bar (2px)
+      // Left status bar (2px) — hidden when not monitorable
       const bar = document.createElement("div");
       bar.style.cssText = `
         width:2px; flex-shrink:0; align-self:stretch;
-        background:${isRunning ? "var(--status-running)" : "var(--border-divider)"};
+        background:${(!monitorable) ? "transparent" : isRunning ? "var(--status-running)" : "var(--border-divider)"};
         transition:background-color 120ms ease;
-        opacity:${isRunning ? "0.9" : "0.4"};
+        opacity:${(!monitorable) ? "0" : isRunning ? "0.9" : "0.4"};
       `;
       r.appendChild(bar);
 
@@ -347,15 +347,15 @@
     }
 
     // ---------- cell builders ----------
-    // Line 1: name + status badge
-    function nameLine(name, isRunning) {
+    // Line 1: name + optional status badge (omitted when not monitorable)
+    function nameLine(name, isRunning, monitorable = true) {
       const line1 = document.createElement("div");
       line1.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:8px;";
       const n = document.createElement("span");
       n.textContent = name;
       n.style.cssText = "font-size:14px; font-weight:600; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
       line1.appendChild(n);
-      line1.appendChild(statusBadge(isRunning));
+      if (monitorable) line1.appendChild(statusBadge(isRunning));
       return line1;
     }
 
@@ -390,7 +390,8 @@
       if (!apps.length) { body.appendChild(emptyRow("No apps in registry.")); return; }
       apps.forEach((a) => {
         const running = a.status === "running";
-        const cells = [nameLine(a.name, running), descLine(a.description || "—")];
+        const mon = a.monitorable !== false;
+        const cells = [nameLine(a.name, running, mon), descLine(a.description || "—")];
         if (a.runCmd) cells.push(monoLine(a.runCmd));
         const btns = [];
         if (a.runCmd) {
@@ -401,7 +402,7 @@
         if (a.localPath) {
           btns.push(btn("Claude", "shell", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/shell`)));
         }
-        body.appendChild(row(running, cells, btns));
+        body.appendChild(row(running, cells, btns, mon));
       });
     }
 
