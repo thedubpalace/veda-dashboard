@@ -101,12 +101,8 @@
 
     <!-- Header -->
     <header class="pt-8 pb-10 flex items-end justify-between">
-      <div>
-        <div style="font-size:10px; letter-spacing:0.2em; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Veda</div>
-        <h1 style="font-size:22px; font-weight:600; color:var(--text-primary); line-height:1;">Dashboard</h1>
-      </div>
-      <div class="flex items-center gap-4">
-        <span id="lastUpdated" style="font-size:10px; color:var(--text-muted); letter-spacing:0.04em;"></span>
+      <h1 style="font-size:22px; font-weight:600; color:var(--text-primary); line-height:1;">Dashboard</h1>
+      <div class="flex items-center">
         <button id="refreshBtn" onclick="refreshAll()" title="Refresh"
           style="width:28px; height:28px; border:1px solid var(--border-default); border-radius:4px; background:transparent; color:var(--text-secondary); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:border-color 120ms ease;"
           onmouseover="this.style.borderColor='var(--border-focus)'"
@@ -122,8 +118,7 @@
     <!-- Veda Apps -->
     <section class="mb-10">
       <div class="flex items-baseline justify-between pb-1.5" style="border-bottom:1px solid var(--border-divider);">
-        <h2 style="font-size:11px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-muted);">Veda Apps</h2>
-        <span id="vedaCount" style="font-size:10px; color:var(--text-muted);"></span>
+        <h2 style="font-size:12px; font-weight:500; color:var(--text-muted);">Veda Apps</h2>
       </div>
       <div id="vedaBody">
         <div style="padding:24px 0; font-size:12px; color:var(--text-muted);">Loading…</div>
@@ -133,18 +128,14 @@
     <!-- Docker -->
     <section class="mb-10">
       <div class="flex items-baseline justify-between pb-1.5" style="border-bottom:1px solid var(--border-divider);">
-        <h2 style="font-size:11px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-muted);">
+        <h2 style="font-size:12px; font-weight:500; color:var(--text-muted);">
           Docker Containers
-          <span id="dockerFilterBadge" class="hidden" style="font-size:9px; font-weight:500; letter-spacing:0.06em; color:var(--accent-text); margin-left:8px;"></span>
+          <span id="dockerFilterBadge" class="hidden" style="font-size:9px; font-weight:500; color:var(--accent-text); margin-left:8px;"></span>
         </h2>
-        <div class="flex items-center gap-3">
-          <span id="dockerCount" style="font-size:10px; color:var(--text-muted);"></span>
-          <!-- #11: ghost chip border so "Filter" reads as clickable -->
-          <button onclick="openDockerSettings()" title="Filter"
-            style="font-size:10px; color:var(--text-muted); background:none; border:1px solid var(--border-default); border-radius:3px; padding:2px 8px; cursor:pointer; letter-spacing:0.06em; text-transform:uppercase; transition:all 120ms ease;"
-            onmouseover="this.style.borderColor='var(--border-focus)'; this.style.color='var(--text-secondary)';"
-            onmouseout="this.style.borderColor='var(--border-default)'; this.style.color='var(--text-muted)';">Filter</button>
-        </div>
+        <button onclick="openDockerSettings()" title="Filter"
+          style="font-size:10px; color:var(--text-muted); background:none; border:1px solid var(--border-default); border-radius:3px; padding:2px 8px; cursor:pointer; letter-spacing:0.06em; text-transform:uppercase; transition:all 120ms ease;"
+          onmouseover="this.style.borderColor='var(--border-focus)'; this.style.color='var(--text-secondary)';"
+          onmouseout="this.style.borderColor='var(--border-default)'; this.style.color='var(--text-muted)';">Filter</button>
       </div>
       <div id="dockerBody">
         <div style="padding:24px 0; font-size:12px; color:var(--text-muted);">Loading…</div>
@@ -188,8 +179,7 @@
     <!-- VMware -->
     <section class="mb-16">
       <div class="flex items-baseline justify-between pb-1.5" style="border-bottom:1px solid var(--border-divider);">
-        <h2 style="font-size:11px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-muted);">VMware VMs</h2>
-        <span id="vmwareCount" style="font-size:10px; color:var(--text-muted);"></span>
+        <h2 style="font-size:12px; font-weight:500; color:var(--text-muted);">VMware VMs</h2>
       </div>
       <div id="vmwareBody">
         <div style="padding:24px 0; font-size:12px; color:var(--text-muted);">Loading…</div>
@@ -227,30 +217,20 @@
       return s;
     }
 
-    // Toast — #10: collapse height on exit so stacked toasts don't jump
+    // Toast — collapse height on exit; no side-bar stripe (#7)
     function toast(message, ok = true) {
       const wrap = document.getElementById("toasts");
       const t = document.createElement("div");
       t.style.cssText = `
-        display:flex; align-items:stretch; gap:12px;
         background:var(--bg-modal); border:1px solid var(--border-default);
-        border-radius:4px; padding:10px 14px 10px 16px; width:280px;
+        border-radius:4px; padding:10px 16px; width:280px;
         box-shadow:0 8px 24px rgba(0,0,0,0.5);
         animation:toastIn 0.2s ease-out;
-        font-size:13px; color:var(--text-primary);
-        font-family:var(--font-sans);
+        font-size:13px; color:${ok ? "var(--text-primary)" : "oklch(72% 0.18 22)"};
+        font-family:var(--font-sans); line-height:1.4;
         max-height:80px; overflow:hidden;
       `;
-      const bar = document.createElement("div");
-      bar.style.cssText = `
-        width:2px; border-radius:1px; flex-shrink:0;
-        background:${ok ? "var(--status-running)" : "oklch(52% 0.18 22)"};
-      `;
-      const msg = document.createElement("span");
-      msg.style.cssText = "line-height:1.4; flex:1;";
-      msg.textContent = message;
-      t.appendChild(bar);
-      t.appendChild(msg);
+      t.textContent = message;
       wrap.appendChild(t);
       setTimeout(() => {
         t.style.transition = "opacity 0.35s, max-height 0.4s 0.15s, padding-top 0.4s 0.15s, padding-bottom 0.4s 0.15s";
@@ -424,7 +404,6 @@
     // ---------- renderers ----------
     function renderVeda(apps) {
       const body = document.getElementById("vedaBody");
-      document.getElementById("vedaCount").textContent = `${apps.length} app(s)`;
       body.innerHTML = "";
       if (!apps.length) { body.appendChild(emptyRow("No apps in registry.")); return; }
       apps.forEach((a) => {
@@ -432,7 +411,9 @@
         const mon = a.monitorable !== false;
         const n = a.claudeSessions || 0;
         const enc = encodeURIComponent(a.name);
-        const cells = [nameLine(a.name, running, mon), descLine(a.description || "—")];
+        // #5: skip description line when empty — no bare "—"
+        const cells = [nameLine(a.name, running, mon)];
+        if (a.description) cells.push(descLine(a.description));
         if (a.runCmd) cells.push(monoLine(a.runCmd));
         // #9: claude sessions line uses text-secondary (not accent) to avoid diluting accent
         if (n > 0) cells.push(monoLine(`claude  ×${n}`, "var(--text-secondary)"));
@@ -458,11 +439,9 @@
 
     function renderDocker(d) {
       const body = document.getElementById("dockerBody");
-      const count = document.getElementById("dockerCount");
       const badge2 = document.getElementById("dockerFilterBadge");
       body.innerHTML = "";
       if (!d || d.available === false) {
-        count.textContent = "unavailable";
         badge2.classList.add("hidden");
         body.appendChild(emptyRow("Docker is not installed or not running."));
         return;
@@ -475,7 +454,6 @@
       } else {
         badge2.classList.add("hidden");
       }
-      count.textContent = `${list.length} container(s)`;
       if (d.error) { body.appendChild(emptyRow("Error: " + d.error)); return; }
       if (!list.length) {
         body.appendChild(emptyRow(filtered ? "No containers match the filter." : "No containers."));
@@ -578,21 +556,19 @@
 
     function renderVmware(v) {
       const body = document.getElementById("vmwareBody");
-      const count = document.getElementById("vmwareCount");
       body.innerHTML = "";
       if (!v || v.available === false) {
-        count.textContent = "unavailable";
         body.appendChild(emptyRow("VMware (vmrun.exe) not found."));
         return;
       }
       const list = v.vms || [];
-      count.textContent = `${list.length} running VM(s)`;
       if (v.error) { body.appendChild(emptyRow("Error: " + v.error)); return; }
       if (!list.length) { body.appendChild(emptyRow("No running VMs.")); return; }
       list.forEach((vm) => {
         const running = vm.status === "running";
         const cells = [nameLine(vm.name, running)];
-        if (vm.vmx) cells.push(monoLine(vm.vmx));
+        // #6: show only filename, not full path
+        if (vm.vmx) cells.push(monoLine(vm.vmx.split(/[\\/]/).pop()));
         const toggleBtn = running
           ? btn("Stop",  "stop",  (b) => action(b, "/api/vmware/stop",  { vmx: vm.vmx, force: false }))
           : btn("Start", "start", (b) => action(b, "/api/vmware/start", { vmx: vm.vmx, gui: false }));
@@ -615,9 +591,6 @@
         renderVeda(data.veda || []);
         renderDocker(data.docker);
         renderVmware(data.vmware);
-        // #12: HH:MM without seconds
-        document.getElementById("lastUpdated").textContent =
-          "updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       } catch (e) {
         if (!silent) toast("Failed to load status: " + (e.message || e), false);
       } finally {
