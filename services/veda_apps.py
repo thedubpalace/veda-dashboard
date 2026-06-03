@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import socket
 from pathlib import Path
@@ -11,11 +12,8 @@ from urllib.parse import urlparse
 import httpx
 import psutil
 
-# Path to the Veda registry. Resolved relative to this file so the dashboard can
-# live anywhere as long as the sibling `veda` repo keeps its layout.
-REGISTRY_PATH = Path(
-    r"C:/Users/ADMIN/Documents/code/veda/.veda/projects/registry.json"
-)
+_DEFAULT_REGISTRY = r"C:/Users/ADMIN/Documents/code/veda/.veda/projects/registry.json"
+REGISTRY_PATH = Path(os.getenv("VEDA_REGISTRY", _DEFAULT_REGISTRY))
 
 HEALTH_TIMEOUT = 3.0
 

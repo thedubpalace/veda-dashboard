@@ -69,14 +69,45 @@
     <section class="mb-6">
       <div class="bg-card border border-edge rounded-xl overflow-hidden">
         <div class="px-5 py-3 border-b border-edge flex items-center justify-between">
-          <h2 class="font-medium text-white flex items-center gap-2">🐳 Docker Containers</h2>
-          <span id="dockerCount" class="text-xs text-slate-500"></span>
+          <h2 class="font-medium text-white flex items-center gap-2">
+            🐳 Docker Containers
+            <span id="dockerFilterBadge" class="hidden text-[10px] font-medium px-2 py-0.5 rounded-full bg-sky-900/60 text-sky-300 border border-sky-700/50"></span>
+          </h2>
+          <div class="flex items-center gap-3">
+            <span id="dockerCount" class="text-xs text-slate-500"></span>
+            <button onclick="openDockerSettings()"
+              title="Filter settings"
+              class="text-slate-400 hover:text-white transition text-base leading-none px-1">⚙</button>
+          </div>
         </div>
         <div id="dockerBody" class="divide-y divide-edge/60">
           <div class="px-5 py-6 text-sm text-slate-500">Loading…</div>
         </div>
       </div>
     </section>
+
+    <!-- Docker Settings Modal -->
+    <div id="dockerModal" class="hidden fixed inset-0 z-40 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/60" onclick="closeDockerSettings()"></div>
+      <div class="relative bg-card border border-edge rounded-xl w-full max-w-md mx-4 p-6 z-50 shadow-2xl">
+        <h3 class="text-white font-semibold mb-1">Docker Filter</h3>
+        <p class="text-xs text-slate-400 mb-4">แสดงเฉพาะ container ที่ชื่อตรงกับ keyword (partial match) — เว้นว่างเพื่อแสดงทั้งหมด</p>
+        <div id="filterTags" class="flex flex-wrap gap-2 mb-3 min-h-[32px]"></div>
+        <div class="flex gap-2">
+          <input id="filterInput" type="text" placeholder="พิมพ์ชื่อ container แล้วกด Enter"
+            class="flex-1 bg-base border border-edge rounded-md px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+            onkeydown="if(event.key==='Enter') addFilterTag()" />
+          <button onclick="addFilterTag()"
+            class="px-3 py-2 text-sm rounded-md bg-sky-700 hover:bg-sky-600 text-white transition">Add</button>
+        </div>
+        <div class="flex justify-end gap-2 mt-5">
+          <button onclick="closeDockerSettings()"
+            class="px-4 py-2 text-sm rounded-md bg-card hover:bg-cardhi border border-edge text-slate-300 transition">Cancel</button>
+          <button onclick="saveDockerFilter()"
+            class="px-4 py-2 text-sm rounded-md bg-emerald-700 hover:bg-emerald-600 text-white transition">Save</button>
+        </div>
+      </div>
+    </div>
 
     <!-- VMware -->
     <section class="mb-6">
@@ -113,10 +144,10 @@
 
     function badge(status) {
       const running = status === "running";
-      const dot = running ? "🟢" : "🔴";
+      const dot = `<span class="inline-block w-1.5 h-1.5 rounded-full ${running ? "bg-emerald-400" : "bg-rose-500"} mr-1 align-middle"></span>`;
       const label = running ? "Running" : "Stopped";
       const color = running ? "text-emerald-400" : "text-rose-400";
-      return `<span class="text-xs font-medium ${color} whitespace-nowrap">${dot} ${label}</span>`;
+      return `<span class="text-[11px] font-medium ${color} whitespace-nowrap">${dot}${label}</span>`;
     }
 
     function toast(message, ok = true) {
@@ -133,10 +164,12 @@
 
     function btn(label, kind, onClick) {
       const palette = kind === "start"
-        ? "bg-emerald-700/80 hover:bg-emerald-600 border-emerald-600"
-        : "bg-rose-700/80 hover:bg-rose-600 border-rose-600";
+        ? "bg-emerald-800/70 hover:bg-emerald-700 border-emerald-700 text-emerald-200"
+        : kind === "shell"
+        ? "bg-sky-900/70 hover:bg-sky-800 border-sky-700 text-sky-200"
+        : "bg-rose-900/70 hover:bg-rose-800 border-rose-700 text-rose-200";
       const b = el("button",
-        `px-3 py-1 text-xs rounded-md border ${palette} text-white transition disabled:opacity-50 disabled:cursor-not-allowed min-w-[64px]`,
+        `w-full px-2 py-1 text-xs rounded border ${palette} transition disabled:opacity-40 disabled:cursor-not-allowed text-center leading-tight`,
         label);
       b.dataset.label = label;
       b.onclick = () => onClick(b);
@@ -169,11 +202,11 @@
     }
 
     function row(cells, actions) {
-      const r = el("div", "px-5 py-3 flex items-center gap-4");
-      const main = el("div", "flex-1 min-w-0");
+      const r = el("div", "px-5 py-3 flex items-center gap-4 hover:bg-white/[.03] transition-colors duration-150 border-l-2 border-transparent hover:border-slate-600");
+      const main = el("div", "flex-1 min-w-0 overflow-hidden");
       main.append(...cells);
       r.appendChild(main);
-      const act = el("div", "flex items-center gap-2 shrink-0");
+      const act = el("div", "flex flex-col gap-1 shrink-0 w-[72px]");
       actions.forEach((a) => act.appendChild(a));
       r.appendChild(act);
       return r;
@@ -190,39 +223,129 @@
       body.innerHTML = "";
       if (!apps.length) { body.appendChild(emptyRow("No apps in registry.")); return; }
       apps.forEach((a) => {
-        const title = el("div", "flex items-center gap-2",
-          `<span class="font-medium text-white truncate">${esc(a.name)}</span>${badge(a.status)}`);
-        const desc = el("div", "text-xs text-slate-400 truncate mt-0.5", esc(a.description || ""));
-        const meta = el("div", "text-[11px] text-slate-600 truncate mt-0.5 font-mono", esc(a.runCmd || ""));
-        const start = btn("Start", "start", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/start`));
-        const stop = btn("Stop", "stop", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/stop`));
-        body.appendChild(row([title, desc, meta], [start, stop]));
+        const running = a.status === "running";
+        const title = el("div", "flex items-center gap-2 min-w-0",
+          `<span class="font-semibold text-white text-sm truncate">${esc(a.name)}</span>${badge(a.status)}`);
+        const desc = el("div", "text-xs text-slate-400 truncate mt-0.5 leading-snug", esc(a.description || "—"));
+        const meta = el("div", "text-[10px] text-slate-600 truncate mt-1 font-mono", esc(a.runCmd || ""));
+        const btns = [];
+        if (a.runCmd) {
+          btns.push(running
+            ? btn("■ Stop", "stop", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/stop`))
+            : btn("▶ Start", "start", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/start`)));
+        }
+        if (a.localPath) {
+          btns.push(btn("⌨ Claude", "shell", (b) => action(b, `/api/apps/${encodeURIComponent(a.name)}/shell`)));
+        }
+        body.appendChild(row([title, desc, meta], btns));
       });
     }
 
     function renderDocker(d) {
       const body = document.getElementById("dockerBody");
       const count = document.getElementById("dockerCount");
+      const badge2 = document.getElementById("dockerFilterBadge");
       body.innerHTML = "";
       if (!d || d.available === false) {
         count.textContent = "unavailable";
+        badge2.classList.add("hidden");
         body.appendChild(emptyRow("Docker is not installed or not running."));
         return;
       }
       const list = d.containers || [];
+      const filtered = d.filtered && (d.filterList || []).length > 0;
+      if (filtered) {
+        badge2.textContent = "filtered: " + d.filterList.join(", ");
+        badge2.classList.remove("hidden");
+      } else {
+        badge2.classList.add("hidden");
+      }
       count.textContent = `${list.length} container(s)`;
       if (d.error) { body.appendChild(emptyRow("Error: " + d.error)); return; }
-      if (!list.length) { body.appendChild(emptyRow("No containers.")); return; }
+      if (!list.length) {
+        body.appendChild(emptyRow(filtered ? "No containers match the filter." : "No containers."));
+        return;
+      }
       list.forEach((c) => {
-        const title = el("div", "flex items-center gap-2",
-          `<span class="font-medium text-white truncate">${esc(c.name)}</span>${badge(c.status)}`);
-        const img = el("div", "text-xs text-slate-400 truncate mt-0.5", "image: " + esc(c.image || ""));
-        const ports = el("div", "text-[11px] text-slate-600 truncate mt-0.5 font-mono",
-          esc(c.ports ? c.ports : c.statusText || ""));
-        const start = btn("Start", "start", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/start`));
-        const stop = btn("Stop", "stop", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/stop`));
-        body.appendChild(row([title, img, ports], [start, stop]));
+        const running = c.status === "running";
+        const title = el("div", "flex items-center gap-2 min-w-0",
+          `<span class="font-semibold text-white text-sm truncate">${esc(c.name)}</span>${badge(c.status)}`);
+        const img = el("div", "text-[11px] text-slate-500 truncate mt-0.5 font-mono", esc(c.image || ""));
+        const ports = c.ports
+          ? el("div", "text-[10px] text-sky-600 truncate mt-0.5 font-mono", esc(c.ports))
+          : el("div", "text-[10px] text-slate-600 truncate mt-0.5", esc(c.statusText || ""));
+        const toggleBtn = running
+          ? btn("■ Stop", "stop", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/stop`))
+          : btn("▶ Start", "start", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/start`));
+        body.appendChild(row([title, img, ports], [toggleBtn]));
       });
+    }
+
+    // ---------- Docker settings modal ----------
+    let _filterTags = [];
+
+    function openDockerSettings() {
+      fetch("/api/settings").then(r => r.json()).then(s => {
+        _filterTags = [...(s.docker?.filter || [])];
+        renderTags();
+        document.getElementById("filterInput").value = "";
+        document.getElementById("dockerModal").classList.remove("hidden");
+        document.getElementById("filterInput").focus();
+      });
+    }
+
+    function closeDockerSettings() {
+      document.getElementById("dockerModal").classList.add("hidden");
+    }
+
+    function renderTags() {
+      const wrap = document.getElementById("filterTags");
+      wrap.innerHTML = "";
+      _filterTags.forEach((tag, i) => {
+        const t = el("span",
+          "flex items-center gap-1 px-2 py-1 rounded-full bg-sky-900/50 border border-sky-700/50 text-sky-300 text-xs",
+          `${esc(tag)} <button onclick="removeTag(${i})" class="hover:text-white leading-none">✕</button>`);
+        wrap.appendChild(t);
+      });
+      if (!_filterTags.length) {
+        wrap.appendChild(el("span", "text-xs text-slate-500 italic", "แสดงทุก container"));
+      }
+    }
+
+    function addFilterTag() {
+      const input = document.getElementById("filterInput");
+      const val = input.value.trim();
+      if (val && !_filterTags.includes(val)) {
+        _filterTags.push(val);
+        renderTags();
+      }
+      input.value = "";
+      input.focus();
+    }
+
+    function removeTag(i) {
+      _filterTags.splice(i, 1);
+      renderTags();
+    }
+
+    async function saveDockerFilter() {
+      try {
+        const res = await fetch("/api/settings/docker/filter", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filter: _filterTags }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          toast("Filter saved", true);
+          closeDockerSettings();
+          refreshAll();
+        } else {
+          toast(data.error || "Save failed", false);
+        }
+      } catch (e) {
+        toast(e.message || "Request failed", false);
+      }
     }
 
     function renderVmware(v) {
@@ -239,11 +362,14 @@
       if (v.error) { body.appendChild(emptyRow("Error: " + v.error)); return; }
       if (!list.length) { body.appendChild(emptyRow("No running VMs.")); return; }
       list.forEach((vm) => {
-        const title = el("div", "flex items-center gap-2",
-          `<span class="font-medium text-white truncate">${esc(vm.name)}</span>${badge(vm.status)}`);
-        const path = el("div", "text-[11px] text-slate-500 truncate mt-0.5 font-mono", esc(vm.vmx));
-        const stop = btn("Stop", "stop", (b) => action(b, "/api/vmware/stop", { vmx: vm.vmx, force: false }));
-        body.appendChild(row([title, path], [stop]));
+        const running = vm.status === "running";
+        const title = el("div", "flex items-center gap-2 min-w-0",
+          `<span class="font-semibold text-white text-sm truncate">${esc(vm.name)}</span>${badge(vm.status)}`);
+        const path = el("div", "text-[10px] text-slate-600 truncate mt-0.5 font-mono", esc(vm.vmx));
+        const toggleBtn = running
+          ? btn("■ Stop", "stop", (b) => action(b, "/api/vmware/stop", { vmx: vm.vmx, force: false }))
+          : btn("▶ Start", "start", (b) => action(b, "/api/vmware/start", { vmx: vm.vmx, gui: false }));
+        body.appendChild(row([title, path], [toggleBtn]));
       });
     }
 

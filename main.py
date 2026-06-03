@@ -5,6 +5,7 @@ Run: uvicorn main:app --reload --port 8765
 from __future__ import annotations
 
 import asyncio
+import json
 import shlex
 import socket
 import subprocess
@@ -19,6 +20,27 @@ from services import docker_service, veda_apps, vmware_service
 
 BASE_DIR = Path(__file__).resolve().parent
 INDEX_HTML = BASE_DIR / "templates" / "index.html"
+SETTINGS_FILE = BASE_DIR / "settings.json"
+
+
+def _load_settings() -> dict[str, Any]:
+    try:
+        return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {"docker": {"filter": []}}
+
+
+def _save_settings(data: dict[str, Any]) -> None:
+    SETTINGS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _apply_docker_filter(containers: list[dict], filters: list[str]) -> list[dict]:
+    if not filters:
+        return containers
+    f = [s.lower() for s in filters if s.strip()]
+    if not f:
+        return containers
+    return [c for c in containers if any(kw in (c.get("name") or "").lower() for kw in f)]
 
 app = FastAPI(title="Veda Dashboard")
 
@@ -41,19 +63,41 @@ async def index() -> HTMLResponse:
 
 
 # ----------------------------------------------------------------------------
+# Settings
+# ----------------------------------------------------------------------------
+@app.get("/api/settings")
+async def get_settings() -> dict[str, Any]:
+    return _load_settings()
+
+
+@app.patch("/api/settings/docker/filter")
+async def set_docker_filter(payload: dict[str, Any]) -> JSONResponse:
+    filters = payload.get("filter")
+    if not isinstance(filters, list):
+        return JSONResponse({"ok": False, "error": "filter must be a list"}, status_code=400)
+    settings = _load_settings()
+    settings.setdefault("docker", {})["filter"] = [str(f) for f in filters if str(f).strip()]
+    _save_settings(settings)
+    return JSONResponse({"ok": True, "filter": settings["docker"]["filter"]})
+
+
+# ----------------------------------------------------------------------------
 # Aggregate status
 # ----------------------------------------------------------------------------
 @app.get("/api/status")
 async def status() -> dict[str, Any]:
-    # Each source does blocking I/O (subprocess / sockets / process scan). Run
-    # them concurrently in threads so the response is bounded by the slowest
-    # source rather than their sum, and the event loop stays unblocked.
     loop = asyncio.get_running_loop()
     veda, docker, vmware = await asyncio.gather(
         loop.run_in_executor(None, veda_apps.list_apps),
         loop.run_in_executor(None, docker_service.list_containers),
         loop.run_in_executor(None, vmware_service.list_vms),
     )
+    filters = _load_settings().get("docker", {}).get("filter", [])
+    if isinstance(docker, dict) and "containers" in docker:
+        docker = dict(docker)
+        docker["containers"] = _apply_docker_filter(docker["containers"], filters)
+        docker["filtered"] = bool(filters)
+        docker["filterList"] = filters
     return {"veda": veda, "docker": docker, "vmware": vmware}
 
 
@@ -105,6 +149,24 @@ async def app_start(name: str) -> JSONResponse:
     return JSONResponse({"ok": True, "message": f"started {name}"})
 
 
+@app.post("/api/apps/{name}/shell")
+async def app_shell(name: str) -> JSONResponse:
+    entry = veda_apps.get_app(name)
+    if not entry:
+        return JSONResponse({"ok": False, "error": f"unknown app: {name}"}, status_code=404)
+    cwd = entry.get("localPath")
+    if not cwd or not Path(cwd).is_dir():
+        return JSONResponse({"ok": False, "error": "localPath not found"}, status_code=400)
+    try:
+        subprocess.Popen(
+            ["powershell", "-NoExit", "-Command", f"Set-Location '{cwd}'; claude remote-control"],
+            creationflags=subprocess.CREATE_NEW_CONSOLE,
+        )
+        return JSONResponse({"ok": True, "message": f"opened shell for {name}"})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+
 @app.post("/api/apps/{name}/stop")
 async def app_stop(name: str) -> JSONResponse:
     entry = veda_apps.get_app(name)
@@ -134,7 +196,14 @@ async def app_stop(name: str) -> JSONResponse:
 # ----------------------------------------------------------------------------
 @app.get("/api/docker")
 async def docker_list() -> dict[str, Any]:
-    return docker_service.list_containers()
+    result = docker_service.list_containers()
+    filters = _load_settings().get("docker", {}).get("filter", [])
+    if isinstance(result, dict) and "containers" in result:
+        result = dict(result)
+        result["containers"] = _apply_docker_filter(result["containers"], filters)
+        result["filtered"] = bool(filters)
+        result["filterList"] = filters
+    return result
 
 
 @app.post("/api/docker/{name}/start")
