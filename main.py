@@ -342,6 +342,67 @@ async def vmware_stop(payload: dict[str, Any]) -> JSONResponse:
 
 
 # ----------------------------------------------------------------------------
+# Tailscale
+# ----------------------------------------------------------------------------
+def _tailscale_status() -> dict[str, Any]:
+    """Return {connected, ip, hostname}. Safe on any failure / not installed."""
+    try:
+        proc = subprocess.run(
+            ["tailscale", "status", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            creationflags=_NO_WINDOW,
+        )
+    except (FileNotFoundError, OSError, subprocess.SubprocessError):
+        return {"connected": False, "ip": None, "hostname": None}
+
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return {"connected": False, "ip": None, "hostname": None}
+
+    try:
+        data = json.loads(proc.stdout)
+    except (json.JSONDecodeError, ValueError):
+        return {"connected": False, "ip": None, "hostname": None}
+
+    connected = (data.get("BackendState") or "") == "Running"
+    self_node = data.get("Self") or {}
+    ips = self_node.get("TailscaleIPs") or []
+    ip = next((a for a in ips if ":" not in a), None) or (ips[0] if ips else None)
+    hostname = self_node.get("HostName")
+    return {"connected": connected, "ip": ip, "hostname": hostname}
+
+
+@app.get("/api/tailscale/status")
+async def tailscale_status() -> dict[str, Any]:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _tailscale_status)
+
+
+@app.post("/api/tailscale/toggle")
+async def tailscale_toggle() -> JSONResponse:
+    loop = asyncio.get_running_loop()
+    current = await loop.run_in_executor(None, _tailscale_status)
+    cmd = ["tailscale", "down"] if current["connected"] else ["tailscale", "up"]
+
+    def _run() -> dict[str, Any]:
+        try:
+            subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                creationflags=_NO_WINDOW,
+            )
+        except (FileNotFoundError, OSError, subprocess.SubprocessError):
+            pass
+        return _tailscale_status()
+
+    new_status = await loop.run_in_executor(None, _run)
+    return JSONResponse({"connected": new_status["connected"], "ip": new_status["ip"]})
+
+
+# ----------------------------------------------------------------------------
 # Claude remote-control sessions
 # ----------------------------------------------------------------------------
 

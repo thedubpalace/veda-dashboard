@@ -102,7 +102,21 @@
     <!-- Header -->
     <header class="pt-8 pb-10 flex items-end justify-between">
       <h1 style="font-size:22px; font-weight:600; color:var(--text-primary); line-height:1;">Dashboard</h1>
-      <div class="flex items-center">
+      <div class="flex items-center" style="gap:14px;">
+
+        <!-- Tailscale widget -->
+        <div id="tsWidget" style="display:flex; align-items:center; gap:10px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span id="tsDot" style="width:7px; height:7px; border-radius:50%; background:var(--status-stopped); flex-shrink:0; transition:background-color 120ms ease;"></span>
+            <span id="tsLabel" style="font-size:10px; font-weight:500; letter-spacing:0.06em; color:var(--text-muted); white-space:nowrap;">Tailscale</span>
+          </div>
+          <span id="tsIp" style="font-size:10px; font-family:var(--font-mono); color:var(--accent-text); letter-spacing:0.02em; white-space:nowrap;"></span>
+          <button id="tsToggle" onclick="toggleTailscale(this)" disabled
+            style="height:24px; padding:0 10px; border:1px solid var(--border-default); background:transparent; color:var(--text-secondary); font-family:var(--font-sans); font-size:10px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; border-radius:3px; cursor:pointer; transition:all 120ms ease; white-space:nowrap;"
+            onmouseover="if(!this.disabled){this.style.borderColor='var(--border-focus)'; this.style.color='var(--accent-text)';}"
+            onmouseout="this.style.borderColor='var(--border-default)'; this.style.color='var(--text-secondary)';">…</button>
+        </div>
+
         <button id="refreshBtn" onclick="refreshAll()" title="Refresh"
           style="width:28px; height:28px; border:1px solid var(--border-default); border-radius:4px; background:transparent; color:var(--text-secondary); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:border-color 120ms ease;"
           onmouseover="this.style.borderColor='var(--border-focus)'"
@@ -600,11 +614,62 @@
       }
     }
 
+    // ---------- Tailscale ----------
+    function renderTailscale(s) {
+      const dot = document.getElementById("tsDot");
+      const label = document.getElementById("tsLabel");
+      const ip = document.getElementById("tsIp");
+      const toggle = document.getElementById("tsToggle");
+      const connected = !!(s && s.connected);
+      dot.style.background = connected ? "var(--status-running)" : "var(--status-stopped)";
+      label.style.color = connected ? "var(--status-running-text)" : "var(--text-muted)";
+      label.textContent = connected ? "Tailscale ●" : "Tailscale ○";
+      ip.textContent = connected && s.ip ? s.ip : "";
+      toggle.disabled = false;
+      toggle.style.opacity = "";
+      toggle.style.cursor = "pointer";
+      toggle.textContent = connected ? "Disconnect" : "Connect";
+      toggle.dataset.connected = connected ? "1" : "0";
+    }
+
+    async function loadTailscale() {
+      try {
+        const res = await fetch("/api/tailscale/status");
+        renderTailscale(await res.json());
+      } catch (e) {
+        renderTailscale({ connected: false, ip: null });
+      }
+    }
+
+    async function toggleTailscale(b) {
+      const wasConnected = b.dataset.connected === "1";
+      b.disabled = true;
+      b.style.opacity = "0.5";
+      b.style.cursor = "not-allowed";
+      const original = b.textContent;
+      b.innerHTML = '<svg class="spinner" width="11" height="11" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="14 8" stroke-linecap="round"/></svg>';
+      try {
+        const res = await fetch("/api/tailscale/toggle", { method: "POST" });
+        const data = await res.json();
+        renderTailscale(data);
+        toast(data.connected ? "Tailscale connected" : "Tailscale disconnected", true);
+      } catch (e) {
+        toast(e.message || "Tailscale toggle failed", false);
+        b.innerHTML = original;
+        b.disabled = false;
+        b.style.opacity = "";
+        b.style.cursor = "pointer";
+        loadTailscale();
+      }
+    }
+
     // #13: Escape closes Docker modal
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeDockerSettings();
     });
 
+    loadTailscale();
+    setInterval(loadTailscale, 15000);
     refreshAll();
     setInterval(refreshAll, 10000);
   </script>
