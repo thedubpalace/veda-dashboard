@@ -315,6 +315,35 @@ async def docker_stop(name: str) -> JSONResponse:
     return JSONResponse(docker_service.stop(name))
 
 
+@app.post("/api/docker/fix")
+async def docker_fix() -> JSONResponse:
+    _DOCKER_DESKTOP = r"C:\Program Files\Docker\Docker\Docker Desktop.exe"
+    import threading, time
+
+    def _restart():
+        # Kill all Docker Desktop processes
+        subprocess.run(["taskkill", "/F", "/IM", "Docker Desktop.exe"], capture_output=True, creationflags=_NO_WINDOW)
+        subprocess.run(["taskkill", "/F", "/IM", "com.docker.backend.exe"], capture_output=True, creationflags=_NO_WINDOW)
+        # Reset WSL so the Linux engine starts clean
+        subprocess.run(["wsl", "--shutdown"], capture_output=True, creationflags=_NO_WINDOW)
+        time.sleep(3)
+        subprocess.Popen(
+            [_DOCKER_DESKTOP],
+            creationflags=_NO_WINDOW,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+        )
+
+    try:
+        if not Path(_DOCKER_DESKTOP).exists():
+            return JSONResponse({"ok": False, "error": "Docker Desktop not found at expected path"}, status_code=500)
+        threading.Thread(target=_restart, daemon=True).start()
+        return JSONResponse({"ok": True, "message": "Restarting Docker Desktop — wait ~30 s then refresh"})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+
 # ----------------------------------------------------------------------------
 # VMware
 # ----------------------------------------------------------------------------

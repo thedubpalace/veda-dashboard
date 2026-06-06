@@ -468,7 +468,11 @@
       } else {
         badge2.classList.add("hidden");
       }
-      if (d.error) { body.appendChild(emptyRow("Error: " + d.error)); return; }
+      if (d.error) {
+        const fixBtn = btn("Fix Docker", "start", (b) => action(b, "/api/docker/fix"));
+        body.appendChild(row(false, [descLine("Error: " + d.error)], [fixBtn]));
+        return;
+      }
       if (!list.length) {
         body.appendChild(emptyRow(filtered ? "No containers match the filter." : "No containers."));
         return;
