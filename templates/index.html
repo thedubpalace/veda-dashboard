@@ -126,6 +126,15 @@
             <polyline points="8,1 8,3 10,3"/>
           </svg>
         </button>
+
+        <button onclick="restartMachine()" title="Restart machine"
+          style="width:28px; height:28px; border:1px solid var(--border-default); border-radius:4px; background:transparent; color:var(--text-secondary); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 120ms ease;"
+          onmouseover="this.style.borderColor='#dc2626'; this.style.color='#dc2626';"
+          onmouseout="this.style.borderColor='var(--border-default)'; this.style.color='var(--text-secondary)';">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 1v3M4 2.3A4.5 4.5 0 1 0 8 2.3"/>
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -592,6 +601,18 @@
           : btn("Start", "start", (b) => action(b, "/api/vmware/start", { vmx: vm.vmx, gui: false }));
         body.appendChild(row(running, cells, [toggleBtn]));
       });
+    }
+
+    // ---------- restart machine ----------
+    async function restartMachine() {
+      if (!confirm("Restart this machine?\n\nAll running services will stop. The machine will reboot in 10 seconds.")) return;
+      try {
+        const r = await fetch("/api/system/restart", { method: "POST" });
+        const d = await r.json();
+        toast(d.message || d.error || (r.ok ? "Restarting…" : "Failed"), r.ok);
+      } catch (e) {
+        toast(e.message || "Request failed", false);
+      }
     }
 
     // ---------- refresh — #3: spin icon; #12: HH:MM only ----------

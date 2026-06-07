@@ -345,6 +345,23 @@ async def docker_fix() -> JSONResponse:
 
 
 # ----------------------------------------------------------------------------
+# System
+# ----------------------------------------------------------------------------
+@app.post("/api/system/restart")
+async def system_restart() -> JSONResponse:
+    try:
+        subprocess.Popen(
+            ["shutdown", "/r", "/t", "10"],
+            creationflags=_NO_WINDOW,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return JSONResponse({"ok": True, "message": "Machine restarting in 10 seconds…"})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+
+# ----------------------------------------------------------------------------
 # VMware
 # ----------------------------------------------------------------------------
 @app.get("/api/vmware")

@@ -1,11 +1,5 @@
 {
   "docker": {
-    "filter": [
-      "matter",
-      "nginx",
-      "duckdns",
-      "Matchday",
-      "watchtower"
-    ]
+    "filter": []
   }
 }
