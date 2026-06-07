@@ -103,15 +103,19 @@ def _check_process(target: str | None) -> bool:
     needle = Path(str(target)).name.lower()
     if needle.endswith(".exe"):
         needle = needle[:-4]
-    for proc in psutil.process_iter(["name"]):
+    for proc in psutil.process_iter(["name", "cmdline"]):
         try:
             pname = (proc.info.get("name") or "").lower()
+            if pname.endswith(".exe"):
+                pname = pname[:-4]
+            if pname == needle:
+                return True
+            # For script targets (e.g. "agent.py"), match against cmdline args
+            cmdline = proc.info.get("cmdline") or []
+            if any(Path(arg).name.lower() == needle for arg in cmdline):
+                return True
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
-        if pname.endswith(".exe"):
-            pname = pname[:-4]
-        if pname == needle:
-            return True
     return False
 
 

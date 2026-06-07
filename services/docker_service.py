@@ -24,6 +24,35 @@ def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _image_dates() -> dict[str, str]:
+    """Return {image_ref: created_at_iso} for all locally available images."""
+    try:
+        proc = _run(["images", "--no-trunc", "--format", "{{json .}}"])
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return {}
+    if proc.returncode != 0:
+        return {}
+    result: dict[str, str] = {}
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        repo = obj.get("Repository") or ""
+        tag  = obj.get("Tag") or ""
+        created = obj.get("CreatedAt") or ""
+        if not repo or repo == "<none>" or not created:
+            continue
+        full = f"{repo}:{tag}" if tag and tag != "<none>" else repo
+        result[full] = created
+        # also index bare name so "nginx" matches "nginx:latest"
+        result[repo] = created
+    return result
+
+
 def list_containers() -> dict[str, Any]:
     """List all containers (running + stopped). `docker ps -a` as JSON lines."""
     try:
@@ -62,6 +91,15 @@ def list_containers() -> dict[str, Any]:
                 "status": "running" if running else "stopped",
             }
         )
+
+    if containers:
+        dates = _image_dates()
+        for c in containers:
+            img = c.get("image") or ""
+            # try exact match, then with :latest appended
+            created = dates.get(img) or dates.get(f"{img}:latest") or ""
+            c["imageCreated"] = created
+
     return {"available": True, "containers": containers}
 
 

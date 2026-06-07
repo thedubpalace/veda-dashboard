@@ -420,6 +420,14 @@
       return m;
     }
 
+    function fmtImageDate(s) {
+      if (!s) return "";
+      // "2024-01-15 08:30:00 +0000 UTC" → JS Date
+      const d = new Date(s.replace(" UTC", "").replace(" +0000", "Z").replace(" ", "T"));
+      if (isNaN(d.getTime())) return s.split(" ")[0];
+      return "img  " + d.toLocaleDateString("en-GB", { year:"numeric", month:"short", day:"numeric" });
+    }
+
     function emptyRow(text) {
       const e = document.createElement("div");
       e.textContent = text;
@@ -550,6 +558,7 @@
         } else if (c.statusText) {
           cells.push(monoLine(c.statusText));
         }
+        if (c.imageCreated) cells.push(monoLine(fmtImageDate(c.imageCreated)));
         const toggleBtn = running
           ? btn("Stop",  "stop",  (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/stop`))
           : btn("Start", "start", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/start`));
