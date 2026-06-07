@@ -139,6 +139,12 @@
     <section class="mb-10">
       <div class="flex items-baseline justify-between pb-1.5" style="border-bottom:1px solid var(--border-divider);">
         <h2 style="font-size:12px; font-weight:500; color:var(--text-muted);">Veda Apps</h2>
+        <div style="display:flex; gap:1px;">
+          <button id="vedaTabStatus" onclick="setVedaTab('status')"
+            style="font-size:10px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; background:none; border:none; padding:2px 8px; cursor:pointer; transition:color 120ms ease; color:var(--accent-text);">Status</button>
+          <button id="vedaTabConfig" onclick="setVedaTab('config')"
+            style="font-size:10px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; background:none; border:none; padding:2px 8px; cursor:pointer; transition:color 120ms ease; color:var(--text-muted);">Config</button>
+        </div>
       </div>
       <div id="vedaBody">
         <div style="padding:24px 0; font-size:12px; color:var(--text-muted);">Loading…</div>
@@ -421,6 +427,58 @@
       return e;
     }
 
+    // ---------- Veda tab state ----------
+    let _vedaTab = "status";
+    let _vedaApps = [];
+
+    function setVedaTab(tab) {
+      _vedaTab = tab;
+      const sSt = document.getElementById("vedaTabStatus").style;
+      const sCf = document.getElementById("vedaTabConfig").style;
+      sSt.color = tab === "status" ? "var(--accent-text)" : "var(--text-muted)";
+      sCf.color = tab === "config"  ? "var(--accent-text)" : "var(--text-muted)";
+      if (tab === "config") renderVedaConfig(_vedaApps);
+      else renderVeda(_vedaApps);
+    }
+
+    function configField(label, value, accent) {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex; gap:10px; align-items:baseline; min-width:0;";
+      const lEl = document.createElement("span");
+      lEl.textContent = label;
+      lEl.style.cssText = "font-size:10px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); flex-shrink:0; width:52px;";
+      const vEl = document.createElement("span");
+      vEl.textContent = value;
+      vEl.style.cssText = `font-size:11px; font-family:var(--font-mono); letter-spacing:0.02em; color:${accent ? "var(--accent-text)" : "var(--text-secondary)"}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;`;
+      row.appendChild(lEl);
+      row.appendChild(vEl);
+      return row;
+    }
+
+    function renderVedaConfig(apps) {
+      const body = document.getElementById("vedaBody");
+      body.innerHTML = "";
+      if (!apps.length) { body.appendChild(emptyRow("No apps in registry.")); return; }
+      apps.forEach((a) => {
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "padding:12px 0 12px 2px; border-bottom:1px solid var(--border-divider); display:flex; flex-direction:column; gap:5px; min-width:0;";
+        const nameEl = document.createElement("div");
+        nameEl.textContent = a.name;
+        nameEl.style.cssText = "font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:3px;";
+        wrap.appendChild(nameEl);
+        if (a.localPath) wrap.appendChild(configField("path", a.localPath, true));
+        if (a.runCmd)    wrap.appendChild(configField("cmd",  a.runCmd,    false));
+        if (a.healthCheck && a.healthCheck.type) {
+          const hcVal = a.healthCheck.target
+            ? `${a.healthCheck.type}  ${a.healthCheck.target}`
+            : a.healthCheck.type;
+          wrap.appendChild(configField("health", hcVal, false));
+        }
+        if (a.repo) wrap.appendChild(configField("repo", a.repo, false));
+        body.appendChild(wrap);
+      });
+    }
+
     // ---------- renderers ----------
     function renderVeda(apps) {
       const body = document.getElementById("vedaBody");
@@ -624,7 +682,9 @@
       try {
         const res = await fetch("/api/status");
         const data = await res.json();
-        renderVeda(data.veda || []);
+        _vedaApps = data.veda || [];
+        if (_vedaTab === "config") renderVedaConfig(_vedaApps);
+        else renderVeda(_vedaApps);
         renderDocker(data.docker);
         renderVmware(data.vmware);
       } catch (e) {
