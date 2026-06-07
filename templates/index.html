@@ -104,19 +104,6 @@
       <h1 style="font-size:22px; font-weight:600; color:var(--text-primary); line-height:1;">Dashboard</h1>
       <div class="flex items-center" style="gap:14px;">
 
-        <!-- Tailscale widget -->
-        <div id="tsWidget" style="display:flex; align-items:center; gap:10px;">
-          <div style="display:flex; align-items:center; gap:6px;">
-            <span id="tsDot" style="width:7px; height:7px; border-radius:50%; background:var(--status-stopped); flex-shrink:0; transition:background-color 120ms ease;"></span>
-            <span id="tsLabel" style="font-size:10px; font-weight:500; letter-spacing:0.06em; color:var(--text-muted); white-space:nowrap;">Tailscale</span>
-          </div>
-          <span id="tsIp" style="font-size:10px; font-family:var(--font-mono); color:var(--accent-text); letter-spacing:0.02em; white-space:nowrap;"></span>
-          <button id="tsToggle" onclick="toggleTailscale(this)" disabled
-            style="height:24px; padding:0 10px; border:1px solid var(--border-default); background:transparent; color:var(--text-secondary); font-family:var(--font-sans); font-size:10px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; border-radius:3px; cursor:pointer; transition:all 120ms ease; white-space:nowrap;"
-            onmouseover="if(!this.disabled){this.style.borderColor='var(--border-focus)'; this.style.color='var(--accent-text)';}"
-            onmouseout="this.style.borderColor='var(--border-default)'; this.style.color='var(--text-secondary)';">…</button>
-        </div>
-
         <button id="refreshBtn" onclick="refreshAll()" title="Refresh"
           style="width:28px; height:28px; border:1px solid var(--border-default); border-radius:4px; background:transparent; color:var(--text-secondary); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:border-color 120ms ease;"
           onmouseover="this.style.borderColor='var(--border-focus)'"
@@ -137,6 +124,16 @@
         </button>
       </div>
     </header>
+
+    <!-- Tailscale -->
+    <section class="mb-10">
+      <div class="flex items-baseline justify-between pb-1.5" style="border-bottom:1px solid var(--border-divider);">
+        <h2 style="font-size:12px; font-weight:500; color:var(--text-muted);">Tailscale</h2>
+      </div>
+      <div id="tailscaleBody">
+        <div style="padding:24px 0; font-size:12px; color:var(--text-muted);">Loading…</div>
+      </div>
+    </section>
 
     <!-- Veda Apps -->
     <section class="mb-10">
@@ -450,11 +447,11 @@
             btns.push(btn("Restart", "start", (b) => action(b, `/api/apps/${enc}/restart`, undefined, 5000, true, "Restarting…")));
           }
         }
-        if (n > 0) {
-          btns.push(btn(`Kill ×${n}`, "stop", (b) => action(b, `/api/apps/${enc}/claude-sessions/kill-all`)));
-        }
         if (a.localPath) {
           btns.push(btn("Claude", "shell", (b) => action(b, `/api/apps/${enc}/shell`)));
+        }
+        if (n > 0) {
+          btns.push(btn(`Kill ×${n}`, "stop", (b) => action(b, `/api/apps/${enc}/claude-sessions/kill-all`)));
         }
         body.appendChild(row(running, cells, btns, mon));
       });
@@ -641,20 +638,14 @@
 
     // ---------- Tailscale ----------
     function renderTailscale(s) {
-      const dot = document.getElementById("tsDot");
-      const label = document.getElementById("tsLabel");
-      const ip = document.getElementById("tsIp");
-      const toggle = document.getElementById("tsToggle");
+      const body = document.getElementById("tailscaleBody");
+      body.innerHTML = "";
       const connected = !!(s && s.connected);
-      dot.style.background = connected ? "var(--status-running)" : "var(--status-stopped)";
-      label.style.color = connected ? "var(--status-running-text)" : "var(--text-muted)";
-      label.textContent = connected ? "Tailscale ●" : "Tailscale ○";
-      ip.textContent = connected && s.ip ? s.ip : "";
-      toggle.disabled = false;
-      toggle.style.opacity = "";
-      toggle.style.cursor = "pointer";
-      toggle.textContent = connected ? "Disconnect" : "Connect";
-      toggle.dataset.connected = connected ? "1" : "0";
+      const cells = [nameLine("Tailscale", connected)];
+      if (connected && s.ip) cells.push(monoLine(s.ip, true));
+      const toggleBtn = btn(connected ? "Disconnect" : "Connect", connected ? "stop" : "start", (b) => toggleTailscale(b));
+      toggleBtn.dataset.connected = connected ? "1" : "0";
+      body.appendChild(row(connected, cells, [toggleBtn]));
     }
 
     async function loadTailscale() {
@@ -667,7 +658,6 @@
     }
 
     async function toggleTailscale(b) {
-      const wasConnected = b.dataset.connected === "1";
       b.disabled = true;
       b.style.opacity = "0.5";
       b.style.cursor = "not-allowed";
@@ -680,10 +670,6 @@
         toast(data.connected ? "Tailscale connected" : "Tailscale disconnected", true);
       } catch (e) {
         toast(e.message || "Tailscale toggle failed", false);
-        b.innerHTML = original;
-        b.disabled = false;
-        b.style.opacity = "";
-        b.style.cursor = "pointer";
         loadTailscale();
       }
     }
