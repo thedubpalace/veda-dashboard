@@ -121,9 +121,23 @@ async def status() -> dict[str, Any]:
 # ----------------------------------------------------------------------------
 # Veda apps
 # ----------------------------------------------------------------------------
+def _apps_with_sessions() -> list[dict[str, Any]]:
+    result = veda_apps.list_apps()
+    all_sessions = _find_claude_sessions()
+    path_to_count: dict[str, int] = {}
+    for s in all_sessions:
+        p = _norm_path(s.get("path"))
+        if p:
+            path_to_count[p] = path_to_count.get(p, 0) + 1
+    for app in result:
+        app["claudeSessions"] = path_to_count.get(_norm_path(app.get("localPath")), 0)
+    return result
+
+
 @app.get("/api/apps")
 async def apps() -> list[dict[str, Any]]:
-    return veda_apps.list_apps()
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _apps_with_sessions)
 
 
 @app.post("/api/apps/{name}/start")
@@ -293,8 +307,7 @@ async def app_stop(name: str) -> JSONResponse:
 # ----------------------------------------------------------------------------
 # Docker
 # ----------------------------------------------------------------------------
-@app.get("/api/docker")
-async def docker_list() -> dict[str, Any]:
+def _docker_with_filter() -> dict[str, Any]:
     result = docker_service.list_containers()
     filters = _load_settings().get("docker", {}).get("filter", [])
     if isinstance(result, dict) and "containers" in result:
@@ -303,6 +316,12 @@ async def docker_list() -> dict[str, Any]:
         result["filtered"] = bool(filters)
         result["filterList"] = filters
     return result
+
+
+@app.get("/api/docker")
+async def docker_list() -> dict[str, Any]:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _docker_with_filter)
 
 
 @app.post("/api/docker/{name}/start")
@@ -366,7 +385,8 @@ async def system_restart() -> JSONResponse:
 # ----------------------------------------------------------------------------
 @app.get("/api/vmware")
 async def vmware_list() -> dict[str, Any]:
-    return vmware_service.list_vms()
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, vmware_service.list_vms)
 
 
 @app.post("/api/vmware/start")

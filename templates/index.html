@@ -89,6 +89,17 @@
     }
     #dockerModal:not(.hidden) { animation: backdropIn 0.2s ease-out; }
     #dockerModal:not(.hidden) > div { animation: panelIn 0.2s ease-out; }
+
+    @keyframes skPulse {
+      0%, 100% { opacity: 0.45; }
+      50%       { opacity: 0.15; }
+    }
+    .sk {
+      background: var(--border-default);
+      border-radius: 2px;
+      animation: skPulse 1.5s ease-in-out infinite;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body style="background:var(--bg-base); font-family:var(--font-sans); color:var(--text-primary);"
@@ -131,7 +142,6 @@
         <h2 style="font-size:12px; font-weight:500; color:var(--text-muted);">Tailscale</h2>
       </div>
       <div id="tailscaleBody">
-        <div style="padding:24px 0; font-size:12px; color:var(--text-muted);">Loading…</div>
       </div>
     </section>
 
@@ -147,7 +157,6 @@
         </div>
       </div>
       <div id="vedaBody">
-        <div style="padding:24px 0; font-size:12px; color:var(--text-muted);">Loading…</div>
       </div>
     </section>
 
@@ -164,7 +173,6 @@
           onmouseout="this.style.borderColor='var(--border-default)'; this.style.color='var(--text-muted)';">Filter</button>
       </div>
       <div id="dockerBody">
-        <div style="padding:24px 0; font-size:12px; color:var(--text-muted);">Loading…</div>
       </div>
     </section>
 
@@ -208,7 +216,6 @@
         <h2 style="font-size:12px; font-weight:500; color:var(--text-muted);">VMware VMs</h2>
       </div>
       <div id="vmwareBody">
-        <div style="padding:24px 0; font-size:12px; color:var(--text-muted);">Loading…</div>
       </div>
     </section>
 
@@ -679,29 +686,53 @@
       }
     }
 
-    // ---------- refresh — #3: spin icon; #12: HH:MM only ----------
-    let inFlight = false;
-    async function refreshAll(silent = false) {
-      if (inFlight) return;
-      inFlight = true;
+    // ---------- refresh — parallel per-section fetches ----------
+    let _loadingVeda = false, _loadingDocker = false, _loadingVmware = false;
+
+    function refreshAll(silent = false) {
       const rb = document.getElementById("refreshBtn");
       const icon = document.getElementById("refreshIcon");
-      rb.disabled = true;
-      icon.style.animation = "spin 0.7s linear infinite"; // #3
-      try {
-        const res = await fetch("/api/status");
-        const data = await res.json();
-        _vedaApps = data.veda || [];
-        if (_vedaTab === "config") renderVedaConfig(_vedaApps);
-        else renderVeda(_vedaApps);
-        renderDocker(data.docker);
-        renderVmware(data.vmware);
-      } catch (e) {
-        if (!silent) toast("Failed to load status: " + (e.message || e), false);
-      } finally {
-        icon.style.animation = ""; // #3: stop spin
-        rb.disabled = false;
-        inFlight = false;
+      if (!_loadingVeda && !_loadingDocker && !_loadingVmware) {
+        rb.disabled = true;
+        icon.style.animation = "spin 0.7s linear infinite";
+      }
+
+      const tryDone = () => {
+        if (!_loadingVeda && !_loadingDocker && !_loadingVmware) {
+          icon.style.animation = "";
+          rb.disabled = false;
+        }
+      };
+
+      if (!_loadingVeda) {
+        _loadingVeda = true;
+        fetch("/api/apps")
+          .then(r => r.json())
+          .then(data => {
+            _vedaApps = data || [];
+            if (_vedaTab === "config") renderVedaConfig(_vedaApps);
+            else renderVeda(_vedaApps);
+          })
+          .catch(e => { if (!silent) toast("Veda: " + (e.message || e), false); })
+          .finally(() => { _loadingVeda = false; tryDone(); });
+      }
+
+      if (!_loadingDocker) {
+        _loadingDocker = true;
+        fetch("/api/docker")
+          .then(r => r.json())
+          .then(data => renderDocker(data))
+          .catch(e => { if (!silent) toast("Docker: " + (e.message || e), false); })
+          .finally(() => { _loadingDocker = false; tryDone(); });
+      }
+
+      if (!_loadingVmware) {
+        _loadingVmware = true;
+        fetch("/api/vmware")
+          .then(r => r.json())
+          .then(data => renderVmware(data))
+          .catch(e => { if (!silent) toast("VMware: " + (e.message || e), false); })
+          .finally(() => { _loadingVmware = false; tryDone(); });
       }
     }
 
@@ -748,6 +779,47 @@
       if (e.key === "Escape") closeDockerSettings();
     });
 
+    // ---------- skeletons ----------
+    function skBar(w, h, delay = 0) {
+      const b = document.createElement("div");
+      b.className = "sk";
+      b.style.cssText = `width:${w}px; height:${h}px; animation-delay:${delay}ms;`;
+      return b;
+    }
+
+    function skRow(lines, btnCount = 1, rowDelay = 0) {
+      const r = document.createElement("div");
+      r.style.cssText = "display:flex; align-items:stretch; border-bottom:1px solid var(--border-divider); min-height:44px;";
+      // left bar
+      const bar = document.createElement("div");
+      bar.style.cssText = "width:2px; flex-shrink:0; align-self:stretch; background:var(--border-divider); opacity:0.3;";
+      r.appendChild(bar);
+      // content
+      const content = document.createElement("div");
+      content.style.cssText = "flex:1; min-width:0; padding:10px 0 10px 14px; display:flex; flex-direction:column; gap:5px; justify-content:center;";
+      lines.forEach(([w, h], i) => content.appendChild(skBar(w, h, rowDelay + i * 60)));
+      r.appendChild(content);
+      // actions
+      const actions = document.createElement("div");
+      actions.style.cssText = "display:flex; flex-direction:column; gap:4px; padding:10px 16px 10px 12px; width:96px; flex-shrink:0; justify-content:center;";
+      for (let i = 0; i < btnCount; i++) actions.appendChild(skBar(68, 24, rowDelay + i * 80));
+      r.appendChild(actions);
+      return r;
+    }
+
+    function initSkeletons() {
+      const sk = (id, rows, btnCount) => {
+        const body = document.getElementById(id);
+        body.innerHTML = "";
+        rows.forEach((lines, i) => body.appendChild(skRow(lines, btnCount, i * 120)));
+      };
+      sk("tailscaleBody", [[[100, 14], [60, 10]]], 1);
+      sk("vedaBody",      [[[140,14],[90,10],[65,10]], [[120,14],[80,10]], [[160,14],[100,10],[55,10]]], 2);
+      sk("dockerBody",    [[[130,14],[85,10],[55,10]], [[110,14],[70,10]], [[145,14],[90,10]]], 1);
+      sk("vmwareBody",    [[[120,14],[75,10]], [[140,14],[85,10]]], 1);
+    }
+
+    initSkeletons();
     loadTailscale();
     setInterval(loadTailscale, 15000);
     refreshAll();
