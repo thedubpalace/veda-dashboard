@@ -94,13 +94,14 @@ async def set_docker_filter(payload: dict[str, Any]) -> JSONResponse:
 @app.get("/api/status")
 async def status() -> dict[str, Any]:
     loop = asyncio.get_running_loop()
+    processes = await loop.run_in_executor(None, veda_apps.snapshot_processes)
     veda, docker, vmware = await asyncio.gather(
-        loop.run_in_executor(None, veda_apps.list_apps),
+        loop.run_in_executor(None, veda_apps.list_apps, processes),
         loop.run_in_executor(None, docker_service.list_containers),
         loop.run_in_executor(None, vmware_service.list_vms),
     )
-    # Merge per-app claude session counts
-    all_sessions = _find_claude_sessions()
+    # Merge per-app claude session counts (reuses the same process snapshot)
+    all_sessions = _find_claude_sessions(processes=processes)
     path_to_count: dict[str, int] = {}
     for s in all_sessions:
         p = _norm_path(s.get("path"))
@@ -122,8 +123,9 @@ async def status() -> dict[str, Any]:
 # Veda apps
 # ----------------------------------------------------------------------------
 def _apps_with_sessions() -> list[dict[str, Any]]:
-    result = veda_apps.list_apps()
-    all_sessions = _find_claude_sessions()
+    processes = veda_apps.snapshot_processes()
+    result = veda_apps.list_apps(processes)
+    all_sessions = _find_claude_sessions(processes=processes)
     path_to_count: dict[str, int] = {}
     for s in all_sessions:
         p = _norm_path(s.get("path"))
@@ -476,28 +478,31 @@ def _norm_path(p: str | None) -> str:
     return str(p).replace("\\", "/").rstrip("/").lower() if p else ""
 
 
-def _find_claude_sessions(app_path: str | None = None) -> list[dict[str, Any]]:
+def _find_claude_sessions(
+    app_path: str | None = None, processes: list[dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
     """Return one entry per PowerShell terminal running claude remote-control.
 
     Pass app_path to filter to sessions whose Set-Location matches that path.
+    Pass processes (from veda_apps.snapshot_processes()) to reuse an existing
+    process scan instead of taking a fresh one.
     """
     norm_filter = _norm_path(app_path) if app_path else None
+    if processes is None:
+        processes = veda_apps.snapshot_processes()
     results = []
-    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
-        try:
-            name = (proc.info.get("name") or "").lower().replace(".exe", "")
-            if name not in ("powershell", "pwsh"):
-                continue
-            cmdline = " ".join(str(c) for c in (proc.info.get("cmdline") or []))
-            if "remote-control" not in cmdline or "claude" not in cmdline.lower():
-                continue
-            m = re.search(r"Set-Location\s+'([^']+)'", cmdline)
-            path = m.group(1) if m else None
-            if norm_filter and _norm_path(path) != norm_filter:
-                continue
-            results.append({"pid": proc.pid, "path": path})
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+    for proc in processes:
+        name = (proc["name"] or "").lower().replace(".exe", "")
+        if name not in ("powershell", "pwsh"):
             continue
+        cmdline = " ".join(str(c) for c in proc["cmdline"])
+        if "remote-control" not in cmdline or "claude" not in cmdline.lower():
+            continue
+        m = re.search(r"Set-Location\s+'([^']+)'", cmdline)
+        path = m.group(1) if m else None
+        if norm_filter and _norm_path(path) != norm_filter:
+            continue
+        results.append({"pid": proc["pid"], "path": path})
     return results
 
 
