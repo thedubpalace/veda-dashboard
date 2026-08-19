@@ -16,6 +16,7 @@ from typing import Any
 import psutil
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from services import docker_service, veda_apps, vmware_service
 
@@ -44,6 +45,7 @@ def _apply_docker_filter(containers: list[dict], filters: list[str]) -> list[dic
     return [c for c in containers if any(kw in (c.get("name") or "").lower() for kw in f)]
 
 app = FastAPI(title="Veda Dashboard")
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 _NO_WINDOW = 0
 try:

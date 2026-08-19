@@ -1,135 +1,435 @@
+<!--
+  DIRECTION CONTRACT
+  THESIS: iOS 26 "Liquid Glass" — floating frosted-glass panels that let the
+    live photo behind them refract through, replacing the flat bordered-list
+    dark theme this dashboard shipped with before.
+  OWN-WORLD: translucent blurred panels (blur+saturate, inset specular
+    hairline, offset depth shadow, radial sheen), pill controls and badges,
+    Apple system semantic colors (systemGreen/Red/Blue/Orange) on a
+    -apple-system/SF type stack, status conveyed by a glowing dot, never a
+    colored left border.
+  STORY: the owner glances at one screen and instantly reads which of their
+    apps/containers/VMs are alive, and can start/stop/restart any of them
+    in one tap, from desktop or phone.
+  FIRST VIEWPORT: wallpaper fills the frame; header title floats directly on
+    it under a soft top scrim; below it, four stacked glass panels (Tailscale,
+    Veda Apps, Docker, VMware), each a grouped list of glass rows.
+  FORM: brief-pinned world (user named "iOS Liquid Glass" explicitly) — no
+    concept tournament run; direction committed straight from the brief per
+    the skill's "brief wins / pinned direction beats the roll" rule.
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the
+    finish review, the verdict, and DESIGN.md.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Veda Dashboard</title>
-  <!-- Google Fonts -->
+  <!-- Google Fonts (fallback for non-Apple devices) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            base:      "var(--bg-base)",
-            surface:   "var(--bg-surface)",
-            surfacehi: "var(--bg-surface-hi)",
-            modal:     "var(--bg-modal)",
-            accent:    "var(--accent)",
-            edge:      "var(--border-default)",
-            divider:   "var(--border-divider)",
-          },
-          fontFamily: {
-            sans: ["Inter", "system-ui", "sans-serif"],
-            mono: ["JetBrains Mono", "Fira Code", "monospace"],
-          },
-        },
-      },
-    };
-  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      /* Backgrounds */
-      --bg-base:        #0e0d0b;
-      --bg-surface:     #161410;
-      --bg-surface-hi:  #1c1a15;
-      --bg-modal:       #131109;
+      /* Type */
+      --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", monospace;
 
-      /* Borders */
-      --border-default: #2a2519;
-      --border-divider: #1f1c14;
-      --border-focus:   #d97706;
+      /* Labels — iOS translucent label vocabulary over glass */
+      --label-primary:    rgba(255,255,255,0.97);
+      --label-secondary:  rgba(255,255,255,0.78);
+      --label-tertiary:   rgba(255,255,255,0.58);
+      --label-quaternary: rgba(255,255,255,0.32);
 
-      /* Text */
-      --text-primary:   #f2ede4;
-      --text-secondary: #a39a88;
-      --text-muted:     #635c4e;
-      --text-on-accent: #171310;
+      /* Apple system semantic colors (dark-mode variants) */
+      --sys-blue:    #0A84FF;
+      --sys-green:   #30D158;
+      --sys-red:     #FF453A;
+      --sys-orange:  #FF9F0A;
+      --sys-yellow:  #FFD60A;
+      --sys-teal:    #40C8E0;
+      --sys-indigo:  #6A5CE6;
+      --sys-gray:    #98989F;
 
-      /* Accent (amber) */
-      --accent:         #d97706;
-      --accent-dim:     #2d2007;
-      --accent-border:  #6b4a12;
-      --accent-text:    #f0a030;
+      /* Glass material */
+      --glass-fill:      linear-gradient(165deg, rgba(255,255,255,0.16), rgba(255,255,255,0.05) 45%, rgba(255,255,255,0.09));
+      --glass-fill-hi:   linear-gradient(165deg, rgba(255,255,255,0.22), rgba(255,255,255,0.08) 45%, rgba(255,255,255,0.12));
+      --glass-border:    rgba(255,255,255,0.20);
+      --glass-hairline:  rgba(255,255,255,0.10);
+      --glass-blur:      28px;
+      --glass-blur-btn:  10px;
+      --radius-panel:    26px;
+      --radius-row:      18px;
+      --radius-pill:     999px;
 
-      /* Status: Running */
-      --status-running:      #d97706;
-      --status-running-text: #f0a030;
-      --status-running-bg:   #261c08;
-
-      /* Status: Stopped */
-      --status-stopped:      #404550;
-      --status-stopped-text: #6b7180;
-      --status-stopped-bg:   #191c22;
-
-      /* Typography */
-      --font-sans: "Inter", system-ui, -apple-system, sans-serif;
-      --font-mono: "JetBrains Mono", "Fira Code", monospace;
+      --shadow-panel: 0 24px 48px -16px rgba(0,0,0,0.55), 0 2px 10px rgba(0,0,0,0.30);
+      --shadow-float: 0 10px 28px -8px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3);
     }
 
+*, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body { height: 100%; }
+    html { overflow-x: hidden; background: #0a141f; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      font-family: var(--font-sans);
+      color: var(--label-primary);
+      text-shadow: 0 1px 4px rgba(0,0,0,0.5), 0 1px 1px rgba(0,0,0,0.4);
+      -webkit-font-smoothing: antialiased;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Fixed wallpaper + legibility scrim — separate fixed layers so mobile
+       Safari's flaky background-attachment:fixed never enters the picture. */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      background: url('/static/wallpaper.jpg') center 30% / cover no-repeat;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background:
+        linear-gradient(180deg, rgba(4,10,20,0.55) 0%, rgba(4,10,20,0.15) 22%, rgba(4,10,20,0.10) 55%, rgba(2,6,14,0.45) 100%);
+    }
+
+    .wrap { max-width: 840px; margin: 0 auto; padding: 0 20px 64px; }
+
+    /* ---------- Header ---------- */
+    header.top {
+      padding: 28px 4px 26px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header.top h1 {
+      margin: 0;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--label-primary);
+      text-shadow: 0 1px 8px rgba(0,0,0,0.35);
+    }
+    .icon-btn {
+      width: 40px; height: 40px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--glass-border);
+      background: var(--glass-fill);
+      backdrop-filter: blur(var(--glass-blur-btn)) saturate(180%);
+      -webkit-backdrop-filter: blur(var(--glass-blur-btn)) saturate(180%);
+      box-shadow: var(--shadow-float), 0 1px 0 rgba(255,255,255,0.16) inset;
+      color: var(--label-primary);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: transform 150ms cubic-bezier(.2,.8,.2,1), background 150ms ease, border-color 150ms ease;
+    }
+    .icon-btn svg { filter: drop-shadow(0 1px 1.5px rgba(0,0,0,0.4)); }
+    .icon-btn:hover { border-color: rgba(255,255,255,0.32); }
+    .icon-btn:active { transform: scale(0.92); }
+    .icon-btn.danger:hover { color: var(--sys-red); border-color: rgba(255,69,58,0.5); }
+    .icon-btn:focus-visible, .btn-pill:focus-visible, .chip-x:focus-visible {
+      outline: none; box-shadow: 0 0 0 3px rgba(10,132,255,0.55), var(--shadow-float);
+    }
+    .header-actions { display: flex; gap: 12px; flex-shrink: 0; }
+    .icon-btn { flex-shrink: 0; }
+
+    /* ---------- Glass panel (section) ---------- */
+    .panel {
+      position: relative;
+      overflow: hidden;
+      border-radius: var(--radius-panel);
+      background: var(--glass-fill);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+      box-shadow: var(--shadow-panel), 0 1px 0 rgba(255,255,255,0.18) inset, 0 -1px 0 rgba(0,0,0,0.14) inset;
+      margin-bottom: 22px;
+      opacity: 0;
+      transform: translateY(10px) scale(0.99);
+      filter: blur(6px);
+      animation: materialize 480ms cubic-bezier(.2,.7,.2,1) forwards;
+    }
+    .panel::before {
+      content: "";
+      position: absolute; inset: 0;
+      background: radial-gradient(130% 65% at 12% -12%, rgba(255,255,255,0.35), transparent 55%);
+      mix-blend-mode: overlay;
+      pointer-events: none;
+    }
+    @keyframes materialize {
+      to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .panel { animation: none; opacity: 1; transform: none; filter: none; }
+    }
+
+    .panel-head {
+      position: relative;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px;
+      padding: 16px 18px 12px;
+    }
+    .panel-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .section-icon {
+      width: 28px; height: 28px; flex-shrink: 0;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 3px 6px -1px rgba(0,0,0,0.35);
+    }
+    .section-icon svg { width: 16px; height: 16px; filter: drop-shadow(0 1px 1.5px rgba(0,0,0,0.4)); }
+    .icon-wifi svg { filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7)); }
+    .panel-title h2 {
+      margin: 0;
+      font-size: 12px; font-weight: 700;
+      letter-spacing: 0.07em; text-transform: uppercase;
+      color: var(--label-secondary);
+    }
+    .panel-title .badge-count {
+      font-size: 10px; font-weight: 600; color: var(--label-tertiary);
+      margin-left: 6px;
+    }
+
+    .seg { display: flex; gap: 2px; flex-shrink: 0; background: rgba(255,255,255,0.08); padding: 2px; border-radius: var(--radius-pill); border: 1px solid var(--glass-border); }
+    .seg button {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+      background: none; border: none; padding: 5px 11px; border-radius: var(--radius-pill);
+      color: var(--label-tertiary); cursor: pointer; transition: all 150ms ease;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+    }
+    .seg button.active { background: rgba(255,255,255,0.20); color: var(--label-primary); box-shadow: 0 2px 5px -1px rgba(0,0,0,0.30); }
+
+    .chip-btn {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+      color: var(--label-secondary); background: rgba(255,255,255,0.08);
+      border: 1px solid var(--glass-border); border-radius: var(--radius-pill);
+      padding: 5px 12px; cursor: pointer; transition: all 150ms ease;
+    }
+    .chip-btn:hover { background: rgba(255,255,255,0.16); color: var(--label-primary); }
+
+    /* ---------- Rows ---------- */
+    .rows { position: relative; }
+    .row {
+      display: flex; align-items: stretch; gap: 12px;
+      padding: 13px 18px;
+      border-top: 1px solid var(--glass-hairline);
+      transition: background-color 150ms ease;
+    }
+    .rows > .row:first-child { border-top: none; }
+    .row:hover { background: rgba(255,255,255,0.05); }
+
+    .row-content { flex: 1; min-width: 0; padding-right: 2px; }
+    .lead-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+      background: var(--sys-gray);
+      box-shadow: none;
+    }
+    .status-dot.is-on {
+      background: var(--sys-green);
+    }
+    .name-text {
+      font-size: 15px; font-weight: 600; color: var(--label-primary);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pill-badge {
+      margin-left: auto; flex-shrink: 0;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+      padding: 3px 10px; border-radius: var(--radius-pill);
+      border: 1px solid transparent;
+    }
+    .pill-badge.on  { color: var(--sys-green); background: rgba(48,209,88,0.16); border-color: rgba(48,209,88,0.32); }
+    .pill-badge.off { color: var(--label-tertiary); background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
+
+    .desc-line {
+      font-size: 12.5px; color: var(--label-secondary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-top: 3px; line-height: 1.4;
+    }
+    .mono-line {
+      font-size: 10.5px; font-family: var(--font-mono); color: var(--label-tertiary);
+      letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-top: 3px;
+    }
+    .mono-line.accent { color: var(--sys-teal); }
+
+    .row-actions {
+      display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px;
+      width: auto; max-width: 220px; flex-shrink: 0;
+      justify-content: flex-end; align-content: center;
+    }
+
+    .empty-row { padding: 26px 18px; font-size: 12.5px; color: var(--label-tertiary); }
+
+    /* ---------- Pill buttons ---------- */
+    .btn-pill {
+      width: auto; height: 30px; padding: 0 14px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--glass-border);
+      background: rgba(255,255,255,0.08);
+      color: var(--label-secondary);
+      font-family: var(--font-sans); font-size: 11px; font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer; white-space: nowrap;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 5px -1px rgba(0,0,0,0.30);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+      transition: transform 120ms cubic-bezier(.2,.8,.2,1), background 150ms ease, border-color 150ms ease, color 150ms ease, opacity 150ms ease, box-shadow 150ms ease;
+    }
+    .btn-pill svg { filter: drop-shadow(0 1px 1.5px rgba(0,0,0,0.4)); }
+    .btn-pill:active:not(:disabled) { transform: scale(0.94); box-shadow: 0 1px 2px -1px rgba(0,0,0,0.25); }
+    .btn-pill:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+    .btn-pill.tone-start:hover:not(:disabled)   { background: rgba(48,209,88,0.18);  border-color: rgba(48,209,88,0.45);  color: var(--sys-green); }
+    .btn-pill.tone-stop:hover:not(:disabled)    { background: rgba(255,69,58,0.18);  border-color: rgba(255,69,58,0.45);  color: var(--sys-red); }
+    .btn-pill.tone-restart:hover:not(:disabled) { background: rgba(255,159,10,0.18); border-color: rgba(255,159,10,0.45); color: var(--sys-orange); }
+    .btn-pill.tone-shell:hover:not(:disabled)   { background: rgba(10,132,255,0.18); border-color: rgba(10,132,255,0.45); color: var(--sys-blue); }
+    .btn-pill.pending {
+      opacity: 0.7; cursor: not-allowed;
+      background: rgba(255,159,10,0.16); border-color: rgba(255,159,10,0.4); color: var(--sys-orange);
+    }
     .spinner { animation: spin 0.7s linear infinite; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 0.9; }
-      50%       { opacity: 0.25; }
-    }
+    /* ---------- Skeletons ---------- */
+    @keyframes skPulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.15; } }
+    .sk { background: rgba(255,255,255,0.22); border-radius: 5px; animation: skPulse 1.5s ease-in-out infinite; flex-shrink: 0; }
 
-    @keyframes toastIn {
-      from { opacity: 0; transform: translateX(12px); }
-      to   { opacity: 1; transform: translateX(0); }
+    /* ---------- Config tab ---------- */
+    .cfg-row { padding: 14px 18px; border-top: 1px solid var(--glass-hairline); }
+    .rows > .cfg-row:first-child { border-top: none; }
+    .cfg-name { font-size: 15px; font-weight: 600; color: var(--label-primary); margin-bottom: 6px; }
+    .cfg-field { display: flex; gap: 10px; align-items: baseline; min-width: 0; margin-top: 4px; }
+    .cfg-field .k {
+      font-size: 9.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+      color: var(--label-tertiary); flex-shrink: 0; width: 52px;
     }
+    .cfg-field .v {
+      font-size: 11.5px; font-family: var(--font-mono); letter-spacing: 0.01em;
+      color: var(--label-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cfg-field .v.accent { color: var(--sys-teal); }
+
+    /* ---------- Toasts (HUD, top-center) ---------- */
+    #toasts {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      z-index: 60; display: flex; flex-direction: column; align-items: center; gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      background: var(--glass-fill-hi);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+      border-radius: var(--radius-pill);
+      padding: 10px 20px;
+      box-shadow: var(--shadow-float), 0 1px 0 rgba(255,255,255,0.2) inset;
+      font-size: 13px; font-weight: 500; line-height: 1.3;
+      max-width: min(88vw, 360px);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      animation: toastIn 260ms cubic-bezier(.2,.8,.2,1);
+    }
+    .toast.err { color: #ffb4ae; }
+    .toast.ok  { color: var(--label-primary); }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(-8px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+    /* ---------- Modal ---------- */
+    #dockerModal {
+      position: fixed; inset: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(2,6,14,0.55);
+      backdrop-filter: blur(6px);
+      animation: backdropIn 200ms ease-out;
+    }
+    #dockerModal.hidden { display: none; }
     @keyframes backdropIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes panelIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
+    .modal-card {
+      width: 100%; max-width: 420px; margin: 0 16px; padding: 26px;
+      border-radius: 28px;
+      background: var(--glass-fill-hi);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+      box-shadow: var(--shadow-panel), 0 1px 0 rgba(255,255,255,0.2) inset;
+      animation: panelIn 220ms cubic-bezier(.2,.8,.2,1);
     }
-    #dockerModal:not(.hidden) { animation: backdropIn 0.2s ease-out; }
-    #dockerModal:not(.hidden) > div { animation: panelIn 0.2s ease-out; }
+    @keyframes panelIn { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    .modal-card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; color: var(--label-primary); }
+    .modal-card p { margin: 0 0 18px; font-size: 12.5px; color: var(--label-secondary); line-height: 1.5; }
+    .chip-wrap { display: flex; flex-wrap: wrap; gap: 7px; min-height: 30px; margin-bottom: 14px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: rgba(255,255,255,0.10); border: 1px solid var(--glass-border);
+      border-radius: var(--radius-pill); padding: 4px 6px 4px 12px;
+      font-size: 12px; color: var(--label-secondary);
+    }
+    .chip-x {
+      background: rgba(255,255,255,0.14); border: none; color: var(--label-secondary);
+      cursor: pointer; line-height: 1; font-size: 10px; padding: 0;
+      width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      transition: all 150ms ease;
+    }
+    .chip-x:hover { background: rgba(255,69,58,0.5); color: #fff; }
+    .chip-empty { font-size: 11.5px; color: var(--label-tertiary); font-style: italic; }
+    .modal-input {
+      flex: 1; background: rgba(0,0,0,0.22); border: 1px solid var(--glass-border);
+      border-radius: var(--radius-pill); padding: 10px 16px; font-size: 13px;
+      color: var(--label-primary); outline: none; font-family: var(--font-sans);
+      transition: border-color 150ms ease;
+    }
+    .modal-input::placeholder { color: var(--label-tertiary); }
+    .modal-input:focus { border-color: rgba(10,132,255,0.6); }
+    .modal-row-input { display: flex; gap: 8px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
+    .btn-modal {
+      padding: 9px 18px; font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+      border-radius: var(--radius-pill); cursor: pointer; transition: all 150ms ease;
+      border: 1px solid var(--glass-border); background: rgba(255,255,255,0.08); color: var(--label-secondary);
+    }
+    .btn-modal:hover { color: var(--label-primary); background: rgba(255,255,255,0.14); }
+    .btn-modal.primary { background: rgba(10,132,255,0.24); border-color: rgba(10,132,255,0.5); color: #cfe6ff; }
+    .btn-modal.primary:hover { background: rgba(10,132,255,0.36); }
+    .btn-modal:active { transform: scale(0.96); }
 
-    @keyframes skPulse {
-      0%, 100% { opacity: 0.45; }
-      50%       { opacity: 0.15; }
-    }
-    .sk {
-      background: var(--border-default);
-      border-radius: 2px;
-      animation: skPulse 1.5s ease-in-out infinite;
-      flex-shrink: 0;
+    @media (max-width: 620px) {
+      .wrap { padding: 0 14px 48px; }
+      header.top { padding: 20px 2px 20px; }
+      header.top h1 { font-size: 22px; }
+      .panel { border-radius: 22px; }
+      .panel-head { padding: 14px 14px 10px; flex-wrap: wrap; row-gap: 10px; }
+      .row { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px 16px; }
+      .row-actions { width: 100%; max-width: none; justify-content: flex-start; }
+      .btn-pill { padding: 0 16px; }
+      .cfg-row { padding: 13px 16px; }
     }
   </style>
 </head>
-<body style="background:var(--bg-base); font-family:var(--font-sans); color:var(--text-primary);"
-      class="min-h-screen antialiased">
+<body>
 
   <!-- Toasts -->
-  <div id="toasts" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2"></div>
+  <div id="toasts"></div>
 
-  <div class="max-w-[900px] mx-auto px-6">
+  <div class="wrap">
 
     <!-- Header -->
-    <header class="pt-8 pb-10 flex items-end justify-between">
-      <h1 style="font-size:22px; font-weight:600; color:var(--text-primary); line-height:1;">Dashboard</h1>
-      <div class="flex items-center" style="gap:14px;">
-
-        <button id="refreshBtn" onclick="refreshAll()" title="Refresh"
-          style="width:28px; height:28px; border:1px solid var(--border-default); border-radius:4px; background:transparent; color:var(--text-secondary); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:border-color 120ms ease;"
-          onmouseover="this.style.borderColor='var(--border-focus)'"
-          onmouseout="this.style.borderColor='var(--border-default)'">
-          <svg id="refreshIcon" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <header class="top">
+      <h1>Dashboard</h1>
+      <div class="header-actions">
+        <button id="refreshBtn" class="icon-btn" onclick="refreshAll()" title="Refresh" aria-label="Refresh">
+          <svg id="refreshIcon" width="15" height="15" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M10.5 6A4.5 4.5 0 1 1 8 2.1"/>
             <polyline points="8,1 8,3 10,3"/>
           </svg>
         </button>
-
-        <button onclick="restartMachine()" title="Restart machine"
-          style="width:28px; height:28px; border:1px solid var(--border-default); border-radius:4px; background:transparent; color:var(--text-secondary); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 120ms ease;"
-          onmouseover="this.style.borderColor='#dc2626'; this.style.color='#dc2626';"
-          onmouseout="this.style.borderColor='var(--border-default)'; this.style.color='var(--text-secondary)';">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <button class="icon-btn danger" onclick="restartMachine()" title="Restart machine" aria-label="Restart machine">
+          <svg width="15" height="15" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M6 1v3M4 2.3A4.5 4.5 0 1 0 8 2.3"/>
           </svg>
         </button>
@@ -137,89 +437,79 @@
     </header>
 
     <!-- Tailscale -->
-    <section class="mb-10">
-      <div class="flex items-baseline justify-between pb-1.5" style="border-bottom:1px solid var(--border-divider);">
-        <h2 style="font-size:12px; font-weight:500; color:var(--text-muted);">Tailscale</h2>
+    <section class="panel">
+      <div class="panel-head">
+        <div class="panel-title">
+          <span class="section-icon icon-wifi" style="background:rgba(64,200,224,0.22); color:var(--sys-teal);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1.6"/><path d="M8.5 15.5a5 5 0 0 1 7 0"/><path d="M5.5 12.5a9 9 0 0 1 13 0"/><path d="M3 9.5a13 13 0 0 1 18 0"/></svg>
+          </span>
+          <h2>Tailscale</h2>
+        </div>
       </div>
-      <div id="tailscaleBody">
-      </div>
+      <div class="rows" id="tailscaleBody"></div>
     </section>
 
     <!-- Veda Apps -->
-    <section class="mb-10">
-      <div class="flex items-baseline justify-between pb-1.5" style="border-bottom:1px solid var(--border-divider);">
-        <h2 style="font-size:12px; font-weight:500; color:var(--text-muted);">Veda Apps</h2>
-        <div style="display:flex; gap:1px;">
-          <button id="vedaTabStatus" onclick="setVedaTab('status')"
-            style="font-size:10px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; background:none; border:none; padding:2px 8px; cursor:pointer; transition:color 120ms ease; color:var(--accent-text);">Status</button>
-          <button id="vedaTabConfig" onclick="setVedaTab('config')"
-            style="font-size:10px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; background:none; border:none; padding:2px 8px; cursor:pointer; transition:color 120ms ease; color:var(--text-muted);">Config</button>
+    <section class="panel">
+      <div class="panel-head">
+        <div class="panel-title">
+          <span class="section-icon" style="background:rgba(106,92,230,0.22); color:var(--sys-indigo);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>
+          </span>
+          <h2>Veda Apps</h2>
+        </div>
+        <div class="seg">
+          <button id="vedaTabStatus" class="active" onclick="setVedaTab('status')">Status</button>
+          <button id="vedaTabConfig" onclick="setVedaTab('config')">Config</button>
         </div>
       </div>
-      <div id="vedaBody">
-      </div>
+      <div class="rows" id="vedaBody"></div>
     </section>
 
     <!-- Docker -->
-    <section class="mb-10">
-      <div class="flex items-baseline justify-between pb-1.5" style="border-bottom:1px solid var(--border-divider);">
-        <h2 style="font-size:12px; font-weight:500; color:var(--text-muted);">
-          Docker Containers
-          <span id="dockerFilterBadge" class="hidden" style="font-size:9px; font-weight:500; color:var(--accent-text); margin-left:8px;"></span>
-        </h2>
-        <button onclick="openDockerSettings()" title="Filter"
-          style="font-size:10px; color:var(--text-muted); background:none; border:1px solid var(--border-default); border-radius:3px; padding:2px 8px; cursor:pointer; letter-spacing:0.06em; text-transform:uppercase; transition:all 120ms ease;"
-          onmouseover="this.style.borderColor='var(--border-focus)'; this.style.color='var(--text-secondary)';"
-          onmouseout="this.style.borderColor='var(--border-default)'; this.style.color='var(--text-muted)';">Filter</button>
+    <section class="panel">
+      <div class="panel-head">
+        <div class="panel-title">
+          <span class="section-icon" style="background:rgba(10,132,255,0.22); color:var(--sys-blue);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8.5" width="16" height="10" rx="2"/><path d="M8 8.5V6.8a1.3 1.3 0 0 1 1.3-1.3h5.4A1.3 1.3 0 0 1 16 6.8v1.7"/><path d="M8.5 12.5h.01M12 12.5h.01M15.5 12.5h.01"/></svg>
+          </span>
+          <h2>Docker Containers <span class="badge-count" id="dockerFilterBadge" style="display:none;"></span></h2>
+        </div>
+        <button class="chip-btn" onclick="openDockerSettings()" title="Filter">Filter</button>
       </div>
-      <div id="dockerBody">
-      </div>
+      <div class="rows" id="dockerBody"></div>
     </section>
 
     <!-- Docker Settings Modal -->
-    <div id="dockerModal" class="hidden fixed inset-0 z-40 flex items-center justify-center"
-         style="background:rgba(0,0,0,0.72);" onclick="closeDockerSettings()">
-      <div style="background:var(--bg-modal); border:1px solid var(--border-default); border-radius:8px; width:100%; max-width:420px; padding:24px; margin:0 16px; box-shadow:0 24px 48px rgba(0,0,0,0.6);"
-           onclick="event.stopPropagation()">
-        <h3 style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:6px;">Docker Filter</h3>
-        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:20px; line-height:1.5;">
-          Show only containers matching keywords (partial match). Leave empty to show all.
-        </p>
-        <div id="filterTags" style="display:flex; flex-wrap:wrap; gap:6px; min-height:28px; margin-bottom:12px;"></div>
-        <div style="display:flex; gap:8px;">
-          <input id="filterInput" type="text" placeholder="Container name, then Enter"
-            style="flex:1; background:var(--bg-base); border:1px solid var(--border-default); border-radius:4px; padding:8px 12px; font-size:13px; color:var(--text-primary); outline:none; font-family:var(--font-sans);"
-            onfocus="this.style.borderColor='var(--border-focus)'"
-            onblur="this.style.borderColor='var(--border-default)'"
+    <div id="dockerModal" class="hidden" onclick="closeDockerSettings()">
+      <div class="modal-card" onclick="event.stopPropagation()">
+        <h3>Docker Filter</h3>
+        <p>Show only containers matching keywords (partial match). Leave empty to show all.</p>
+        <div id="filterTags" class="chip-wrap"></div>
+        <div class="modal-row-input">
+          <input id="filterInput" class="modal-input" type="text" placeholder="Container name, then Enter"
             onkeydown="if(event.key==='Enter') addFilterTag()" />
-          <button onclick="addFilterTag()"
-            style="padding:8px 12px; font-size:11px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; border:1px solid var(--border-default); background:transparent; color:var(--text-secondary); border-radius:4px; cursor:pointer; transition:all 120ms ease;"
-            onmouseover="this.style.borderColor='var(--border-focus)'; this.style.color='var(--accent-text)';"
-            onmouseout="this.style.borderColor='var(--border-default)'; this.style.color='var(--text-secondary)';">Add</button>
+          <button class="btn-modal" onclick="addFilterTag()">Add</button>
         </div>
-        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
-          <button onclick="closeDockerSettings()"
-            style="padding:6px 14px; font-size:11px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; border:1px solid var(--border-default); background:transparent; color:var(--text-secondary); border-radius:4px; cursor:pointer; transition:all 120ms ease;"
-            onmouseover="this.style.color='var(--text-primary)'"
-            onmouseout="this.style.color='var(--text-secondary)'">Cancel</button>
-          <button onclick="saveDockerFilter()"
-            style="padding:6px 14px; font-size:11px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; border:1px solid var(--accent-border); background:var(--accent-dim); color:var(--accent-text); border-radius:4px; cursor:pointer; transition:all 120ms ease;"
-            onmouseover="this.style.background='oklch(26% 0.06 65)'; this.style.borderColor='var(--accent)';"
-            onmouseout="this.style.background='var(--accent-dim)'; this.style.borderColor='var(--accent-border)';">Save</button>
+        <div class="modal-actions">
+          <button class="btn-modal" onclick="closeDockerSettings()">Cancel</button>
+          <button class="btn-modal primary" onclick="saveDockerFilter()">Save</button>
         </div>
       </div>
     </div>
 
     <!-- VMware -->
-    <section class="mb-16">
-      <div class="flex items-baseline justify-between pb-1.5" style="border-bottom:1px solid var(--border-divider);">
-        <h2 style="font-size:12px; font-weight:500; color:var(--text-muted);">VMware VMs</h2>
+    <section class="panel">
+      <div class="panel-head">
+        <div class="panel-title">
+          <span class="section-icon" style="background:rgba(152,152,159,0.22); color:var(--sys-gray);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="11" rx="2"/><path d="M8 19.5h8M12 15.5v4"/></svg>
+          </span>
+          <h2>VMware VMs</h2>
+        </div>
       </div>
-      <div id="vmwareBody">
-      </div>
+      <div class="rows" id="vmwareBody"></div>
     </section>
-
-    <!-- #15: footer removed -->
 
   </div>
 
@@ -238,81 +528,50 @@
       }[c]));
     }
 
-    // Status badge (inline text, no capsule)
-    function statusBadge(isRunning) {
-      const s = document.createElement("span");
-      s.textContent = isRunning ? "● RUN" : "○ OFF";
-      s.style.cssText = `
-        font-size:10px; font-weight:500; letter-spacing:0.08em;
-        color:${isRunning ? "var(--status-running-text)" : "var(--status-stopped-text)"};
-        white-space:nowrap; flex-shrink:0;
-      `;
-      return s;
+    // Status dot + trailing pill badge
+    function statusDot(isRunning) {
+      const d = document.createElement("span");
+      d.className = "status-dot" + (isRunning ? " is-on" : "");
+      return d;
     }
 
-    // Toast — collapse height on exit; no side-bar stripe (#7)
+    function statusPill(isRunning) {
+      const p = document.createElement("span");
+      p.className = "pill-badge " + (isRunning ? "on" : "off");
+      p.textContent = isRunning ? "Running" : "Stopped";
+      return p;
+    }
+
+    // Toast — glass HUD, top-center
     function toast(message, ok = true) {
       const wrap = document.getElementById("toasts");
       const t = document.createElement("div");
-      t.style.cssText = `
-        background:var(--bg-modal); border:1px solid var(--border-default);
-        border-radius:4px; padding:10px 16px; width:280px;
-        box-shadow:0 8px 24px rgba(0,0,0,0.5);
-        animation:toastIn 0.2s ease-out;
-        font-size:13px; color:${ok ? "var(--text-primary)" : "oklch(72% 0.18 22)"};
-        font-family:var(--font-sans); line-height:1.4;
-        max-height:80px; overflow:hidden;
-      `;
+      t.className = "toast " + (ok ? "ok" : "err");
       t.textContent = message;
       wrap.appendChild(t);
       setTimeout(() => {
-        t.style.transition = "opacity 0.35s, max-height 0.4s 0.15s, padding-top 0.4s 0.15s, padding-bottom 0.4s 0.15s";
+        t.style.transition = "opacity 300ms ease, transform 300ms ease";
         t.style.opacity = "0";
-        t.style.maxHeight = "0";
-        t.style.paddingTop = "0";
-        t.style.paddingBottom = "0";
-      }, 3500);
-      setTimeout(() => t.remove(), 4200);
+        t.style.transform = "translateY(-6px) scale(0.97)";
+      }, 3200);
+      setTimeout(() => t.remove(), 3550);
     }
 
-    // Ghost button — #2: height reduced to 24px
+    // Pill button
     function btn(label, kind, onClick) {
       const b = document.createElement("button");
-      const hoverStyles = {
-        start:   { border: "var(--status-running)", color: "var(--status-running-text)", bg: "var(--status-running-bg)" },
-        stop:    { border: "oklch(52% 0.18 22)",    color: "oklch(62% 0.18 22)",         bg: "oklch(12% 0.06 22)" },
-        shell:   { border: "var(--accent)",          color: "var(--accent-text)",          bg: "var(--accent-dim)" },
-      };
-      const h = hoverStyles[kind] || hoverStyles.start;
+      const toneMap = { start: "tone-start", stop: "tone-stop", restart: "tone-restart", shell: "tone-shell" };
+      b.className = "btn-pill " + (toneMap[kind] || "tone-shell");
       b.textContent = label;
       b.dataset.label = label;
-      b.style.cssText = `
-        width:100%; height:24px; border:1px solid var(--border-default);
-        background:transparent; color:var(--text-secondary);
-        font-family:var(--font-sans); font-size:10px; font-weight:500;
-        letter-spacing:0.06em; text-transform:uppercase;
-        border-radius:3px; cursor:pointer; transition:all 120ms ease;
-        white-space:nowrap;
-      `;
-      b.onmouseenter = () => {
-        if (b.disabled) return;
-        b.style.borderColor = h.border;
-        b.style.color = h.color;
-        b.style.backgroundColor = h.bg;
-      };
-      b.onmouseleave = () => {
-        b.style.borderColor = "var(--border-default)";
-        b.style.color = "var(--text-secondary)";
-        b.style.backgroundColor = "transparent";
-      };
       b.onclick = () => onClick(b);
       return b;
     }
 
-    // action() — #1: pendingLabel keeps button in "Restarting…" state during postDelay
+    // action() — pendingLabel keeps button in "Restarting…" state during postDelay
     async function action(b, url, body, postDelay = 600, silentRefresh = false, pendingLabel = null) {
       const all = b.parentElement.querySelectorAll("button");
-      all.forEach((x) => { x.disabled = true; x.style.opacity = "0.4"; x.style.cursor = "not-allowed"; });
+      all.forEach((x) => { x.disabled = true; });
       const original = b.innerHTML;
       b.innerHTML = '<svg class="spinner" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="14 8" stroke-linecap="round"/></svg>';
       try {
@@ -330,106 +589,69 @@
         toast(e.message || "Request failed", false);
       } finally {
         if (pendingLabel) {
-          // Keep this button in a "pending" disabled state; re-enable others
           b.textContent = pendingLabel;
-          b.style.opacity = "0.5";
-          b.style.cursor = "not-allowed";
-          b.style.color = "var(--status-running-text)";
-          b.style.borderColor = "var(--accent-border)";
-          all.forEach((x) => { if (x !== b) { x.disabled = false; x.style.opacity = ""; x.style.cursor = "pointer"; } });
+          b.classList.add("pending");
+          all.forEach((x) => { if (x !== b) x.disabled = false; });
           setTimeout(() => {
             b.innerHTML = original;
             b.disabled = false;
-            b.style.opacity = "";
-            b.style.cursor = "pointer";
-            b.style.color = "var(--text-secondary)";
-            b.style.borderColor = "var(--border-default)";
+            b.classList.remove("pending");
             refreshAll(silentRefresh);
           }, postDelay);
         } else {
           b.innerHTML = original;
-          all.forEach((x) => { x.disabled = false; x.style.opacity = ""; x.style.cursor = "pointer"; });
+          all.forEach((x) => { x.disabled = false; });
           setTimeout(() => refreshAll(silentRefresh), postDelay);
         }
       }
     }
 
-    // Row factory — #2: action column 96px; #8: non-monitorable bar uses width:0
-    function row(isRunning, cells, actionBtns, monitorable = true) {
+    // Row factory
+    function row(cells, actionBtns) {
       const r = document.createElement("div");
-      r.style.cssText = `
-        display:flex; align-items:stretch;
-        border-bottom:1px solid var(--border-divider);
-        transition:background-color 120ms ease;
-        cursor:default; min-height:44px;
-      `;
-      r.onmouseenter = () => r.style.backgroundColor = "var(--bg-surface-hi)";
-      r.onmouseleave = () => r.style.backgroundColor = "";
-
-      // Left status bar — #8: width:0 for non-monitorable (no phantom space)
-      const bar = document.createElement("div");
-      if (monitorable) {
-        bar.style.cssText = `
-          width:2px; flex-shrink:0; align-self:stretch;
-          background:${isRunning ? "var(--status-running)" : "var(--border-divider)"};
-          transition:background-color 120ms ease;
-          opacity:${isRunning ? "0.9" : "0.4"};
-        `;
-      } else {
-        bar.style.cssText = "width:0; flex-shrink:0;";
-      }
-      r.appendChild(bar);
-
-      // Content
+      r.className = "row";
       const content = document.createElement("div");
-      content.style.cssText = "flex:1; min-width:0; padding:10px 0 10px 14px; overflow:hidden;";
+      content.className = "row-content";
       cells.forEach(c => content.appendChild(c));
       r.appendChild(content);
-
-      // Actions — #2: 96px wide
-      const actions = document.createElement("div");
-      actions.style.cssText = "display:flex; flex-direction:column; gap:4px; padding:10px 16px 10px 12px; width:96px; flex-shrink:0; justify-content:center;";
-      actionBtns.forEach(b => actions.appendChild(b));
-      r.appendChild(actions);
-
+      if (actionBtns.length) {
+        const actions = document.createElement("div");
+        actions.className = "row-actions";
+        actionBtns.forEach(b => actions.appendChild(b));
+        r.appendChild(actions);
+      }
       return r;
     }
 
     // ---------- cell builders ----------
-    // Line 1: name + optional status badge
-    function nameLine(name, isRunning, monitorable = true) {
+    function leadLine(name, isRunning, monitorable = true) {
       const line1 = document.createElement("div");
-      line1.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:8px;";
+      line1.className = "lead-line";
+      if (monitorable) line1.appendChild(statusDot(isRunning));
       const n = document.createElement("span");
       n.textContent = name;
-      n.style.cssText = "font-size:14px; font-weight:600; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+      n.className = "name-text";
       line1.appendChild(n);
-      if (monitorable) line1.appendChild(statusBadge(isRunning));
+      if (monitorable) line1.appendChild(statusPill(isRunning));
       return line1;
     }
 
-    // Secondary description line
     function descLine(text) {
       const d = document.createElement("div");
       d.textContent = text;
-      d.style.cssText = "font-size:12px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; line-height:1.4;";
+      d.className = "desc-line";
       return d;
     }
 
-    // Tertiary mono metadata line — color accepts bool (accent) or CSS string
-    function monoLine(text, color) {
+    function monoLine(text, accent) {
       const m = document.createElement("div");
       m.textContent = text;
-      const c = !color ? "var(--text-muted)"
-               : color === true ? "var(--accent-text)"
-               : color;
-      m.style.cssText = `font-size:10px; font-family:var(--font-mono); color:${c}; letter-spacing:0.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;`;
+      m.className = "mono-line" + (accent ? " accent" : "");
       return m;
     }
 
     function fmtImageDate(s) {
       if (!s) return "";
-      // "2024-01-15 08:30:00 +0000 UTC" → JS Date
       const d = new Date(s.replace(" UTC", "").replace(" +0000", "Z").replace(" ", "T"));
       if (isNaN(d.getTime())) return s.split(" ")[0];
       return "img  " + d.toLocaleDateString("en-GB", { year:"numeric", month:"short", day:"numeric" });
@@ -438,7 +660,7 @@
     function emptyRow(text) {
       const e = document.createElement("div");
       e.textContent = text;
-      e.style.cssText = "padding:24px 0; font-size:12px; color:var(--text-muted);";
+      e.className = "empty-row";
       return e;
     }
 
@@ -448,26 +670,24 @@
 
     function setVedaTab(tab) {
       _vedaTab = tab;
-      const sSt = document.getElementById("vedaTabStatus").style;
-      const sCf = document.getElementById("vedaTabConfig").style;
-      sSt.color = tab === "status" ? "var(--accent-text)" : "var(--text-muted)";
-      sCf.color = tab === "config"  ? "var(--accent-text)" : "var(--text-muted)";
+      document.getElementById("vedaTabStatus").classList.toggle("active", tab === "status");
+      document.getElementById("vedaTabConfig").classList.toggle("active", tab === "config");
       if (tab === "config") renderVedaConfig(_vedaApps);
       else renderVeda(_vedaApps);
     }
 
     function configField(label, value, accent) {
-      const row = document.createElement("div");
-      row.style.cssText = "display:flex; gap:10px; align-items:baseline; min-width:0;";
+      const r = document.createElement("div");
+      r.className = "cfg-field";
       const lEl = document.createElement("span");
       lEl.textContent = label;
-      lEl.style.cssText = "font-size:10px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); flex-shrink:0; width:52px;";
+      lEl.className = "k";
       const vEl = document.createElement("span");
       vEl.textContent = value;
-      vEl.style.cssText = `font-size:11px; font-family:var(--font-mono); letter-spacing:0.02em; color:${accent ? "var(--accent-text)" : "var(--text-secondary)"}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;`;
-      row.appendChild(lEl);
-      row.appendChild(vEl);
-      return row;
+      vEl.className = "v" + (accent ? " accent" : "");
+      r.appendChild(lEl);
+      r.appendChild(vEl);
+      return r;
     }
 
     function renderVedaConfig(apps) {
@@ -476,10 +696,10 @@
       if (!apps.length) { body.appendChild(emptyRow("No apps in registry.")); return; }
       apps.forEach((a) => {
         const wrap = document.createElement("div");
-        wrap.style.cssText = "padding:12px 0 12px 2px; border-bottom:1px solid var(--border-divider); display:flex; flex-direction:column; gap:5px; min-width:0;";
+        wrap.className = "cfg-row";
         const nameEl = document.createElement("div");
         nameEl.textContent = a.name;
-        nameEl.style.cssText = "font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:3px;";
+        nameEl.className = "cfg-name";
         wrap.appendChild(nameEl);
         if (a.localPath) wrap.appendChild(configField("path", a.localPath, true));
         if (a.runCmd)    wrap.appendChild(configField("cmd",  a.runCmd,    false));
@@ -504,20 +724,17 @@
         const mon = a.monitorable !== false;
         const n = a.claudeSessions || 0;
         const enc = encodeURIComponent(a.name);
-        // #5: skip description line when empty — no bare "—"
-        const cells = [nameLine(a.name, running, mon)];
+        const cells = [leadLine(a.name, running, mon)];
         if (a.description) cells.push(descLine(a.description));
         if (a.runCmd) cells.push(monoLine(a.runCmd));
-        // #9: claude sessions line uses text-secondary (not accent) to avoid diluting accent
-        if (n > 0) cells.push(monoLine(`claude  ×${n}`, "var(--text-secondary)"));
+        if (n > 0) cells.push(monoLine(`claude  ×${n}`, false));
         const btns = [];
         if (a.runCmd) {
           btns.push(running
             ? btn("Stop",    "stop",  (b) => action(b, `/api/apps/${enc}/stop`))
             : btn("Start",   "start", (b) => action(b, `/api/apps/${enc}/start`)));
-          // #1: Restart shows "Restarting…" label during 5s wait
           if (running) {
-            btns.push(btn("Restart", "start", (b) => action(b, `/api/apps/${enc}/restart`, undefined, 5000, true, "Restarting…")));
+            btns.push(btn("Restart", "restart", (b) => action(b, `/api/apps/${enc}/restart`, undefined, 5000, true, "Restarting…")));
           }
         }
         if (a.localPath) {
@@ -526,7 +743,7 @@
         if (n > 0) {
           btns.push(btn(`Kill ×${n}`, "stop", (b) => action(b, `/api/apps/${enc}/claude-sessions/kill-all`)));
         }
-        body.appendChild(row(running, cells, btns, mon));
+        body.appendChild(row(cells, btns));
       });
     }
 
@@ -535,7 +752,7 @@
       const badge2 = document.getElementById("dockerFilterBadge");
       body.innerHTML = "";
       if (!d || d.available === false) {
-        badge2.classList.add("hidden");
+        badge2.style.display = "none";
         body.appendChild(emptyRow("Docker is not installed or not running."));
         return;
       }
@@ -543,13 +760,13 @@
       const filtered = d.filtered && (d.filterList || []).length > 0;
       if (filtered) {
         badge2.textContent = "filtered: " + d.filterList.join(", ");
-        badge2.classList.remove("hidden");
+        badge2.style.display = "";
       } else {
-        badge2.classList.add("hidden");
+        badge2.style.display = "none";
       }
       if (d.error) {
-        const fixBtn = btn("Fix Docker", "start", (b) => action(b, "/api/docker/fix"));
-        body.appendChild(row(false, [descLine("Error: " + d.error)], [fixBtn]));
+        const fixBtn = btn("Fix Docker", "shell", (b) => action(b, "/api/docker/fix"));
+        body.appendChild(row([descLine("Error: " + d.error)], [fixBtn]));
         return;
       }
       if (!list.length) {
@@ -558,7 +775,7 @@
       }
       list.forEach((c) => {
         const running = c.status === "running";
-        const cells = [nameLine(c.name, running)];
+        const cells = [leadLine(c.name, running)];
         if (c.image) cells.push(descLine(c.image));
         if (c.ports) {
           cells.push(monoLine(c.ports, true));
@@ -569,7 +786,7 @@
         const toggleBtn = running
           ? btn("Stop",  "stop",  (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/stop`))
           : btn("Start", "start", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/start`));
-        body.appendChild(row(running, cells, [toggleBtn]));
+        body.appendChild(row(cells, [toggleBtn]));
       });
     }
 
@@ -595,14 +812,13 @@
       wrap.innerHTML = "";
       _filterTags.forEach((tag, i) => {
         const t = document.createElement("span");
-        t.style.cssText = "display:inline-flex; align-items:center; gap:6px; background:transparent; border:1px solid var(--border-default); border-radius:3px; padding:2px 8px; font-size:11px; color:var(--text-secondary);";
+        t.className = "chip";
         const label = document.createElement("span");
         label.textContent = tag;
         const rm = document.createElement("button");
+        rm.className = "chip-x";
         rm.textContent = "✕";
-        rm.style.cssText = "background:none; border:none; color:var(--text-muted); cursor:pointer; line-height:1; font-size:11px; padding:0; transition:color 120ms ease;";
-        rm.onmouseover = () => rm.style.color = "var(--text-primary)";
-        rm.onmouseout = () => rm.style.color = "var(--text-muted)";
+        rm.setAttribute("aria-label", "Remove " + tag);
         rm.onclick = () => removeTag(i);
         t.appendChild(label);
         t.appendChild(rm);
@@ -611,7 +827,7 @@
       if (!_filterTags.length) {
         const empty = document.createElement("span");
         empty.textContent = "Showing all containers";
-        empty.style.cssText = "font-size:11px; color:var(--text-muted); font-style:italic;";
+        empty.className = "chip-empty";
         wrap.appendChild(empty);
       }
     }
@@ -664,13 +880,12 @@
       if (!list.length) { body.appendChild(emptyRow("No running VMs.")); return; }
       list.forEach((vm) => {
         const running = vm.status === "running";
-        const cells = [nameLine(vm.name, running)];
-        // #6: show only filename, not full path
+        const cells = [leadLine(vm.name, running)];
         if (vm.vmx) cells.push(monoLine(vm.vmx.split(/[\\/]/).pop()));
         const toggleBtn = running
           ? btn("Stop",  "stop",  (b) => action(b, "/api/vmware/stop",  { vmx: vm.vmx, force: false }))
           : btn("Start", "start", (b) => action(b, "/api/vmware/start", { vmx: vm.vmx, gui: false }));
-        body.appendChild(row(running, cells, [toggleBtn]));
+        body.appendChild(row(cells, [toggleBtn]));
       });
     }
 
@@ -741,11 +956,11 @@
       const body = document.getElementById("tailscaleBody");
       body.innerHTML = "";
       const connected = !!(s && s.connected);
-      const cells = [nameLine("Tailscale", connected)];
+      const cells = [leadLine("Tailscale", connected)];
       if (connected && s.ip) cells.push(monoLine(s.ip, true));
       const toggleBtn = btn(connected ? "Disconnect" : "Connect", connected ? "stop" : "start", (b) => toggleTailscale(b));
       toggleBtn.dataset.connected = connected ? "1" : "0";
-      body.appendChild(row(connected, cells, [toggleBtn]));
+      body.appendChild(row(cells, [toggleBtn]));
     }
 
     async function loadTailscale() {
@@ -759,8 +974,6 @@
 
     async function toggleTailscale(b) {
       b.disabled = true;
-      b.style.opacity = "0.5";
-      b.style.cursor = "not-allowed";
       const original = b.textContent;
       b.innerHTML = '<svg class="spinner" width="11" height="11" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="14 8" stroke-linecap="round"/></svg>';
       try {
@@ -774,7 +987,7 @@
       }
     }
 
-    // #13: Escape closes Docker modal
+    // Escape closes Docker modal
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeDockerSettings();
     });
@@ -789,21 +1002,18 @@
 
     function skRow(lines, btnCount = 1, rowDelay = 0) {
       const r = document.createElement("div");
-      r.style.cssText = "display:flex; align-items:stretch; border-bottom:1px solid var(--border-divider); min-height:44px;";
-      // left bar
-      const bar = document.createElement("div");
-      bar.style.cssText = "width:2px; flex-shrink:0; align-self:stretch; background:var(--border-divider); opacity:0.3;";
-      r.appendChild(bar);
-      // content
+      r.className = "row";
       const content = document.createElement("div");
-      content.style.cssText = "flex:1; min-width:0; padding:10px 0 10px 14px; display:flex; flex-direction:column; gap:5px; justify-content:center;";
+      content.className = "row-content";
+      content.style.cssText = "display:flex; flex-direction:column; gap:6px;";
       lines.forEach(([w, h], i) => content.appendChild(skBar(w, h, rowDelay + i * 60)));
       r.appendChild(content);
-      // actions
-      const actions = document.createElement("div");
-      actions.style.cssText = "display:flex; flex-direction:column; gap:4px; padding:10px 16px 10px 12px; width:96px; flex-shrink:0; justify-content:center;";
-      for (let i = 0; i < btnCount; i++) actions.appendChild(skBar(68, 24, rowDelay + i * 80));
-      r.appendChild(actions);
+      if (btnCount) {
+        const actions = document.createElement("div");
+        actions.className = "row-actions";
+        for (let i = 0; i < btnCount; i++) actions.appendChild(skBar(72, 30, rowDelay + i * 80));
+        r.appendChild(actions);
+      }
       return r;
     }
 
@@ -813,10 +1023,10 @@
         body.innerHTML = "";
         rows.forEach((lines, i) => body.appendChild(skRow(lines, btnCount, i * 120)));
       };
-      sk("tailscaleBody", [[[100, 14], [60, 10]]], 1);
-      sk("vedaBody",      [[[140,14],[90,10],[65,10]], [[120,14],[80,10]], [[160,14],[100,10],[55,10]]], 2);
-      sk("dockerBody",    [[[130,14],[85,10],[55,10]], [[110,14],[70,10]], [[145,14],[90,10]]], 1);
-      sk("vmwareBody",    [[[120,14],[75,10]], [[140,14],[85,10]]], 1);
+      sk("tailscaleBody", [[[100, 15], [60, 10]]], 1);
+      sk("vedaBody",      [[[140,15],[90,10],[65,10]], [[120,15],[80,10]], [[160,15],[100,10],[55,10]]], 2);
+      sk("dockerBody",    [[[130,15],[85,10],[55,10]], [[110,15],[70,10]], [[145,15],[90,10]]], 1);
+      sk("vmwareBody",    [[[120,15],[75,10]], [[140,15],[85,10]]], 1);
     }
 
     initSkeletons();
