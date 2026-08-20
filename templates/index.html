@@ -226,6 +226,16 @@
     .rows > .row:first-child { border-top: none; }
     .row:hover { background: rgba(255,255,255,0.05); }
 
+    /* Grouped app card — one app name, independent frontend/backend sub-rows */
+    .app-group { border-top: 1px solid var(--glass-hairline); padding-bottom: 4px; }
+    .rows > .app-group:first-child { border-top: none; }
+    .app-group-head {
+      padding: 13px 18px 2px;
+      font-size: 15px; font-weight: 700; color: var(--label-primary);
+    }
+    .app-group-sub { padding-left: 30px; border-top: none; }
+    .app-group-sub .name-text { font-size: 12.5px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--label-secondary); }
+
     .row-content { flex: 1; min-width: 0; padding-right: 2px; }
     .lead-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .status-dot {
@@ -239,9 +249,11 @@
     .name-text {
       font-size: 15px; font-weight: 600; color: var(--label-primary);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      width: 190px; flex-shrink: 0;
     }
+    .app-group-sub .name-text { width: 178px; }
     .pill-badge {
-      margin-left: auto; flex-shrink: 0;
+      flex-shrink: 0;
       font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
       padding: 3px 10px; border-radius: var(--radius-pill);
       border: 1px solid transparent;
@@ -408,6 +420,10 @@
       .row-actions { width: 100%; max-width: none; justify-content: flex-start; }
       .btn-pill { padding: 0 16px; }
       .cfg-row { padding: 13px 16px; }
+      .app-group-head { padding: 13px 16px 2px; }
+      .app-group-sub { padding-left: 22px; }
+      .name-text { width: 130px; }
+      .app-group-sub .name-text { width: 124px; }
     }
   </style>
 </head>
@@ -631,6 +647,7 @@
       const n = document.createElement("span");
       n.textContent = name;
       n.className = "name-text";
+      n.title = name;
       line1.appendChild(n);
       if (monitorable) line1.appendChild(statusPill(isRunning));
       return line1;
@@ -640,6 +657,7 @@
       const d = document.createElement("div");
       d.textContent = text;
       d.className = "desc-line";
+      d.title = text;
       return d;
     }
 
@@ -647,6 +665,7 @@
       const m = document.createElement("div");
       m.textContent = text;
       m.className = "mono-line" + (accent ? " accent" : "");
+      m.title = text;
       return m;
     }
 
@@ -715,35 +734,81 @@
     }
 
     // ---------- renderers ----------
+    // Build one app's row. displayName overrides what's shown (e.g. "Frontend"/
+    // "Backend" inside a group) while API calls still use the real a.name.
+    function buildAppRow(a, displayName) {
+      const running = a.status === "running";
+      const mon = a.monitorable !== false;
+      const n = a.claudeSessions || 0;
+      const enc = encodeURIComponent(a.name);
+      const cells = [leadLine(displayName || a.name, running, mon)];
+      if (a.description) cells.push(descLine(a.description));
+      if (a.runCmd) cells.push(monoLine(a.runCmd));
+      if (n > 0) cells.push(monoLine(`claude  ×${n}`, false));
+      const btns = [];
+      if (a.runCmd) {
+        btns.push(running
+          ? btn("Stop",    "stop",  (b) => action(b, `/api/apps/${enc}/stop`))
+          : btn("Start",   "start", (b) => action(b, `/api/apps/${enc}/start`)));
+        btns.push(btn("Restart", "restart", (b) => action(b, `/api/apps/${enc}/restart`, undefined, 5000, true, "Restarting…")));
+      }
+      if (a.localPath) {
+        btns.push(btn("Claude", "shell", (b) => action(b, `/api/apps/${enc}/shell`)));
+      }
+      if (n > 0) {
+        btns.push(btn(`Kill ×${n}`, "stop", (b) => action(b, `/api/apps/${enc}/claude-sessions/kill-all`)));
+      }
+      return row(cells, btns);
+    }
+
+    // Group apps whose name follows the "<base>" / "<base>-frontend" /
+    // "<base>-backend" convention into one card with independent sub-rows,
+    // each keeping its own start/stop/restart.
+    function groupVedaApps(apps) {
+      const groups = new Map();
+      apps.forEach((a) => {
+        let base = a.name, role = null;
+        if (a.name.endsWith("-frontend")) { base = a.name.slice(0, -"-frontend".length); role = "frontend"; }
+        else if (a.name.endsWith("-backend")) { base = a.name.slice(0, -"-backend".length); role = "backend"; }
+        if (!groups.has(base)) groups.set(base, []);
+        groups.get(base).push({ app: a, role });
+      });
+      const ordered = [];
+      groups.forEach((members, base) => {
+        if (members.length > 1) {
+          const hasFrontend = members.some((m) => m.role === "frontend");
+          const hasBackend = members.some((m) => m.role === "backend");
+          members.forEach((m) => {
+            if (!m.role) m.role = hasBackend && !hasFrontend ? "frontend" : "backend";
+          });
+          members.sort((x, y) => (x.role === "frontend" ? 0 : 1) - (y.role === "frontend" ? 0 : 1));
+        }
+        ordered.push({ base, members });
+      });
+      return ordered;
+    }
+
     function renderVeda(apps) {
       const body = document.getElementById("vedaBody");
       body.innerHTML = "";
       if (!apps.length) { body.appendChild(emptyRow("No apps in registry.")); return; }
-      apps.forEach((a) => {
-        const running = a.status === "running";
-        const mon = a.monitorable !== false;
-        const n = a.claudeSessions || 0;
-        const enc = encodeURIComponent(a.name);
-        const cells = [leadLine(a.name, running, mon)];
-        if (a.description) cells.push(descLine(a.description));
-        if (a.runCmd) cells.push(monoLine(a.runCmd));
-        if (n > 0) cells.push(monoLine(`claude  ×${n}`, false));
-        const btns = [];
-        if (a.runCmd) {
-          btns.push(running
-            ? btn("Stop",    "stop",  (b) => action(b, `/api/apps/${enc}/stop`))
-            : btn("Start",   "start", (b) => action(b, `/api/apps/${enc}/start`)));
-          if (running) {
-            btns.push(btn("Restart", "restart", (b) => action(b, `/api/apps/${enc}/restart`, undefined, 5000, true, "Restarting…")));
-          }
+      groupVedaApps(apps).forEach(({ base, members }) => {
+        if (members.length === 1) {
+          body.appendChild(buildAppRow(members[0].app));
+          return;
         }
-        if (a.localPath) {
-          btns.push(btn("Claude", "shell", (b) => action(b, `/api/apps/${enc}/shell`)));
-        }
-        if (n > 0) {
-          btns.push(btn(`Kill ×${n}`, "stop", (b) => action(b, `/api/apps/${enc}/claude-sessions/kill-all`)));
-        }
-        body.appendChild(row(cells, btns));
+        const group = document.createElement("div");
+        group.className = "app-group";
+        const head = document.createElement("div");
+        head.className = "app-group-head";
+        head.textContent = base;
+        group.appendChild(head);
+        members.forEach(({ app, role }) => {
+          const sub = buildAppRow(app, role === "frontend" ? "Frontend" : "Backend");
+          sub.classList.add("app-group-sub");
+          group.appendChild(sub);
+        });
+        body.appendChild(group);
       });
     }
 
