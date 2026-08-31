@@ -12,14 +12,15 @@ except AttributeError:
     _NO_WINDOW = 0
 
 DOCKER_TIMEOUT = 15
+DOCKER_RESTART_TIMEOUT = 30
 
 
-def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
+def _run(args: list[str], timeout: int = DOCKER_TIMEOUT) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["docker", *args],
         capture_output=True,
         text=True,
-        timeout=DOCKER_TIMEOUT,
+        timeout=timeout,
         creationflags=_NO_WINDOW,
     )
 
@@ -111,9 +112,13 @@ def stop(name: str) -> dict[str, Any]:
     return _control("stop", name)
 
 
-def _control(action: str, name: str) -> dict[str, Any]:
+def restart(name: str) -> dict[str, Any]:
+    return _control("restart", name, timeout=DOCKER_RESTART_TIMEOUT)
+
+
+def _control(action: str, name: str, timeout: int = DOCKER_TIMEOUT) -> dict[str, Any]:
     try:
-        proc = _run([action, name])
+        proc = _run([action, name], timeout=timeout)
     except FileNotFoundError:
         return {"available": False, "ok": False, "error": "docker not installed"}
     except subprocess.TimeoutExpired:

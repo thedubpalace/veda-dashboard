@@ -95,11 +95,11 @@
     }
     body::after {
       content: "";
-      position: fixed;
+      position: absolute;
       inset: 0;
       z-index: -1;
       background:
-        linear-gradient(180deg, rgba(4,10,20,0.55) 0%, rgba(4,10,20,0.15) 22%, rgba(4,10,20,0.10) 55%, rgba(2,6,14,0.45) 100%);
+        linear-gradient(180deg, rgba(4,10,20,0.5) 0px, rgba(4,10,20,0.18) 180px, transparent 340px);
     }
 
     .wrap { max-width: 840px; margin: 0 auto; padding: 0 20px 64px; }
@@ -161,7 +161,7 @@
     .panel::before {
       content: "";
       position: absolute; inset: 0;
-      background: radial-gradient(130% 65% at 12% -12%, rgba(255,255,255,0.35), transparent 55%);
+      background: radial-gradient(560px 320px at 12% -12%, rgba(255,255,255,0.35), transparent 55%);
       mix-blend-mode: overlay;
       pointer-events: none;
     }
@@ -218,7 +218,7 @@
     /* ---------- Rows ---------- */
     .rows { position: relative; }
     .row {
-      display: flex; align-items: stretch; gap: 12px;
+      display: flex; flex-direction: column; align-items: stretch; gap: 10px;
       padding: 13px 18px;
       border-top: 1px solid var(--glass-hairline);
       transition: background-color 150ms ease;
@@ -249,11 +249,10 @@
     .name-text {
       font-size: 15px; font-weight: 600; color: var(--label-primary);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      width: 190px; flex-shrink: 0;
+      min-width: 0; flex-shrink: 1;
     }
-    .app-group-sub .name-text { width: 178px; }
     .pill-badge {
-      flex-shrink: 0;
+      margin-left: auto; flex-shrink: 0;
       font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
       padding: 3px 10px; border-radius: var(--radius-pill);
       border: 1px solid transparent;
@@ -275,8 +274,8 @@
 
     .row-actions {
       display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px;
-      width: auto; max-width: 220px; flex-shrink: 0;
-      justify-content: flex-end; align-content: center;
+      width: 100%; max-width: none; flex-shrink: 0;
+      justify-content: flex-start; align-content: center;
     }
 
     .empty-row { padding: 26px 18px; font-size: 12.5px; color: var(--label-tertiary); }
@@ -416,14 +415,11 @@
       header.top h1 { font-size: 22px; }
       .panel { border-radius: 22px; }
       .panel-head { padding: 14px 14px 10px; flex-wrap: wrap; row-gap: 10px; }
-      .row { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px 16px; }
-      .row-actions { width: 100%; max-width: none; justify-content: flex-start; }
+      .row { padding: 14px 16px; }
       .btn-pill { padding: 0 16px; }
       .cfg-row { padding: 13px 16px; }
       .app-group-head { padding: 13px 16px 2px; }
       .app-group-sub { padding-left: 22px; }
-      .name-text { width: 130px; }
-      .app-group-sub .name-text { width: 124px; }
     }
   </style>
 </head>
@@ -848,10 +844,14 @@
           cells.push(monoLine(c.statusText));
         }
         if (c.imageCreated) cells.push(monoLine(fmtImageDate(c.imageCreated)));
-        const toggleBtn = running
-          ? btn("Stop",  "stop",  (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/stop`))
-          : btn("Start", "start", (b) => action(b, `/api/docker/${encodeURIComponent(c.name)}/start`));
-        body.appendChild(row(cells, [toggleBtn]));
+        const enc = encodeURIComponent(c.name);
+        const btns = [running
+          ? btn("Stop",  "stop",  (b) => action(b, `/api/docker/${enc}/stop`))
+          : btn("Start", "start", (b) => action(b, `/api/docker/${enc}/start`))];
+        if (running) {
+          btns.push(btn("Restart", "restart", (b) => action(b, `/api/docker/${enc}/restart`, undefined, 3000, true, "Restarting…")));
+        }
+        body.appendChild(row(cells, btns));
       });
     }
 

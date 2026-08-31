@@ -128,6 +128,10 @@ def _is_running(app: dict[str, Any], processes: list[dict[str, Any]]) -> bool:
     hc_type = (hc.get("type") or "null").lower()
     target = hc.get("target")
 
+    if hc_type == "none":
+        # Explicitly not a runnable local service (e.g. huawei-watchface) —
+        # never health-checked, never reported as running.
+        return False
     if hc_type == "http":
         # A raw TCP connect is enough to tell "running" from "stopped" here,
         # and it's far more reliably bounded by its timeout than an HTTP GET
@@ -143,7 +147,15 @@ def _is_running(app: dict[str, Any], processes: list[dict[str, Any]]) -> bool:
 
 
 def _is_monitorable(app: dict[str, Any]) -> bool:
-    """Return True only when the app can be started/stopped from the dashboard."""
+    """Return True only when the app can be started/stopped/restarted and
+    should show a live status indicator on the dashboard.
+
+    Apps with healthCheck.type == "none" (e.g. huawei-watchface — not a
+    runnable local service) are always excluded, even if a runCmd exists.
+    """
+    hc = app.get("healthCheck") or {}
+    if (hc.get("type") or "").lower() == "none":
+        return False
     return bool(app.get("runCmd"))
 
 
@@ -178,6 +190,8 @@ def list_apps(processes: list[dict[str, Any]] | None = None) -> list[dict[str, A
                 "repo": app.get("repo"),
                 "localPath": app.get("localPath"),
                 "healthCheck": app.get("healthCheck"),
+                "containerName": app.get("containerName"),
+                "dockerImage": app.get("dockerImage"),
             }
         )
     return apps

@@ -190,6 +190,17 @@ async def app_restart(name: str) -> JSONResponse:
     if not entry:
         return JSONResponse({"ok": False, "error": f"unknown app: {name}"}, status_code=404)
 
+    # Container-backed apps (dockerImage/containerName in the registry) are
+    # restarted via `docker restart` — never by killing/re-running runCmd,
+    # since runCmd for these entries is typically just the local-dev fallback.
+    container_name = entry.get("containerName")
+    if container_name:
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, docker_service.restart, container_name)
+        if result.get("ok"):
+            result.setdefault("message", f"restarted container {container_name}")
+        return JSONResponse(result)
+
     run_cmd = entry.get("runCmd")
     if not run_cmd:
         return JSONResponse({"ok": False, "error": "no runCmd configured"}, status_code=400)
@@ -336,6 +347,13 @@ async def docker_start(name: str) -> JSONResponse:
 @app.post("/api/docker/{name}/stop")
 async def docker_stop(name: str) -> JSONResponse:
     return JSONResponse(docker_service.stop(name))
+
+
+@app.post("/api/docker/{name}/restart")
+async def docker_restart(name: str) -> JSONResponse:
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(None, docker_service.restart, name)
+    return JSONResponse(result)
 
 
 @app.post("/api/docker/fix")
