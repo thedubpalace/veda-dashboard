@@ -5,7 +5,22 @@
       "duckdns",
       "watchtower",
       "matter",
-      "matchday"
+      "matchday",
+      "solar",
+      "flight",
+      "pour",
+      "akai"
+    ]
+  },
+  "vmware": {
+    "managed": [
+      {
+        "name": "home-assistant",
+        "vmx": "C:/Users/ADMIN/Documents/Virtual Machines/home-assistant.vmx",
+        "desiredRunning": true,
+        "healthUrl": "https://wavenwire.duckdns.org/api/",
+        "healthExpectedStatus": 401
+      }
     ]
   }
 }

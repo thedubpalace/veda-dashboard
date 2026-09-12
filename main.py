@@ -8,6 +8,7 @@ import asyncio
 import json
 import re
 import shlex
+import shutil
 import socket
 import subprocess
 from pathlib import Path
@@ -36,6 +37,26 @@ def _save_settings(data: dict[str, Any]) -> None:
     SETTINGS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _managed_vms() -> list[dict[str, Any]]:
+    configured = _load_settings().get("vmware", {}).get("managed", [])
+    if not isinstance(configured, list):
+        return []
+    return [vm for vm in configured if isinstance(vm, dict) and vm.get("vmx")]
+
+
+def _set_vm_desired_running(vmx: str, desired_running: bool) -> None:
+    settings = _load_settings()
+    managed = settings.get("vmware", {}).get("managed", [])
+    if not isinstance(managed, list):
+        return
+    target = _norm_path(vmx)
+    for vm in managed:
+        if isinstance(vm, dict) and _norm_path(vm.get("vmx")) == target:
+            vm["desiredRunning"] = desired_running
+            _save_settings(settings)
+            return
+
+
 def _apply_docker_filter(containers: list[dict], filters: list[str]) -> list[dict]:
     if not filters:
         return containers
@@ -46,6 +67,32 @@ def _apply_docker_filter(containers: list[dict], filters: list[str]) -> list[dic
 
 app = FastAPI(title="Veda Dashboard")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+
+_vmware_watchdog_task: asyncio.Task | None = None
+
+
+async def _vmware_watchdog() -> None:
+    """Keep desired VMs running; Task Scheduler independently covers reboot."""
+    await asyncio.sleep(30)
+    while True:
+        try:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, vmware_service.ensure_desired_running, _managed_vms())
+        except Exception:  # noqa: BLE001
+            pass
+        await asyncio.sleep(60)
+
+
+@app.on_event("startup")
+async def start_vmware_watchdog() -> None:
+    global _vmware_watchdog_task
+    _vmware_watchdog_task = asyncio.create_task(_vmware_watchdog())
+
+
+@app.on_event("shutdown")
+async def stop_vmware_watchdog() -> None:
+    if _vmware_watchdog_task:
+        _vmware_watchdog_task.cancel()
 
 _NO_WINDOW = 0
 try:
@@ -100,17 +147,9 @@ async def status() -> dict[str, Any]:
     veda, docker, vmware = await asyncio.gather(
         loop.run_in_executor(None, veda_apps.list_apps, processes),
         loop.run_in_executor(None, docker_service.list_containers),
-        loop.run_in_executor(None, vmware_service.list_vms),
+        loop.run_in_executor(None, vmware_service.list_vms, _managed_vms()),
     )
-    # Merge per-app claude session counts (reuses the same process snapshot)
-    all_sessions = _find_claude_sessions(processes=processes)
-    path_to_count: dict[str, int] = {}
-    for s in all_sessions:
-        p = _norm_path(s.get("path"))
-        if p:
-            path_to_count[p] = path_to_count.get(p, 0) + 1
-    for app in veda:
-        app["claudeSessions"] = path_to_count.get(_norm_path(app.get("localPath")), 0)
+    _attach_session_counts(veda, processes)
 
     filters = _load_settings().get("docker", {}).get("filter", [])
     if isinstance(docker, dict) and "containers" in docker:
@@ -127,14 +166,7 @@ async def status() -> dict[str, Any]:
 def _apps_with_sessions() -> list[dict[str, Any]]:
     processes = veda_apps.snapshot_processes()
     result = veda_apps.list_apps(processes)
-    all_sessions = _find_claude_sessions(processes=processes)
-    path_to_count: dict[str, int] = {}
-    for s in all_sessions:
-        p = _norm_path(s.get("path"))
-        if p:
-            path_to_count[p] = path_to_count.get(p, 0) + 1
-    for app in result:
-        app["claudeSessions"] = path_to_count.get(_norm_path(app.get("localPath")), 0)
+    _attach_session_counts(result, processes)
     return result
 
 
@@ -295,6 +327,56 @@ async def app_shell(name: str) -> JSONResponse:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
 
 
+@app.post("/api/apps/{name}/codex")
+async def app_codex(name: str) -> JSONResponse:
+    """Open an interactive Codex session in an app's local folder."""
+    entry = veda_apps.get_app(name)
+    if not entry:
+        return JSONResponse({"ok": False, "error": f"unknown app: {name}"}, status_code=404)
+    cwd = entry.get("localPath")
+    if not cwd or not Path(cwd).is_dir():
+        return JSONResponse({"ok": False, "error": "localPath not found"}, status_code=400)
+    codex_exe = _find_codex_executable()
+    if not codex_exe:
+        return JSONResponse(
+            {"ok": False, "error": "Codex CLI was not found. Install or update the Codex desktop app."},
+            status_code=503,
+        )
+    try:
+        safe_cwd = str(cwd).replace("'", "''")
+        safe_codex = codex_exe.replace("'", "''")
+        subprocess.Popen(
+            [
+                "powershell",
+                "-NoExit",
+                "-Command",
+                f"$env:HOME = $env:USERPROFILE; Set-Location -LiteralPath '{safe_cwd}'; & '{safe_codex}'",
+            ],
+            creationflags=subprocess.CREATE_NEW_CONSOLE,
+        )
+        return JSONResponse({"ok": True, "message": f"opened Codex for {name}"})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+
+def _find_codex_executable() -> str | None:
+    """Find the Codex CLI even when this server's PATH predates its install."""
+    from_path = shutil.which("codex") or shutil.which("codex.exe")
+    if from_path:
+        return from_path
+
+    # Codex Desktop installs versioned CLI binaries here on Windows. Searching
+    # this narrow directory makes the launcher resilient to stale server PATHs.
+    install_dir = Path.home() / "AppData" / "Local" / "OpenAI" / "Codex" / "bin"
+    try:
+        candidates = [path for path in install_dir.glob("*/codex.exe") if path.is_file()]
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    return str(max(candidates, key=lambda path: path.stat().st_mtime))
+
+
 @app.post("/api/apps/{name}/stop")
 async def app_stop(name: str) -> JSONResponse:
     entry = veda_apps.get_app(name)
@@ -408,7 +490,7 @@ async def system_restart() -> JSONResponse:
 @app.get("/api/vmware")
 async def vmware_list() -> dict[str, Any]:
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, vmware_service.list_vms)
+    return await loop.run_in_executor(None, vmware_service.list_vms, _managed_vms())
 
 
 @app.post("/api/vmware/start")
@@ -417,7 +499,10 @@ async def vmware_start(payload: dict[str, Any]) -> JSONResponse:
     if not vmx:
         return JSONResponse({"ok": False, "error": "vmx required"}, status_code=400)
     gui = bool(payload.get("gui", False))
-    return JSONResponse(vmware_service.start_vm(vmx, gui))
+    result = vmware_service.start_vm(vmx, gui)
+    if result.get("ok"):
+        _set_vm_desired_running(vmx, True)
+    return JSONResponse(result)
 
 
 @app.post("/api/vmware/stop")
@@ -426,6 +511,9 @@ async def vmware_stop(payload: dict[str, Any]) -> JSONResponse:
     if not vmx:
         return JSONResponse({"ok": False, "error": "vmx required"}, status_code=400)
     force = bool(payload.get("force", False))
+    # A dashboard-initiated stop is intentional, so do not immediately undo it
+    # with the watchdog. Starting it again re-enables auto-recovery.
+    _set_vm_desired_running(vmx, False)
     return JSONResponse(vmware_service.stop_vm(vmx, force))
 
 
@@ -526,6 +614,40 @@ def _find_claude_sessions(
     return results
 
 
+def _find_codex_sessions(
+    app_path: str | None = None, processes: list[dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
+    """Return dashboard-launched Codex terminals, optionally for one app path."""
+    norm_filter = _norm_path(app_path) if app_path else None
+    if processes is None:
+        processes = veda_apps.snapshot_processes()
+    results = []
+    for proc in processes:
+        name = (proc["name"] or "").lower().replace(".exe", "")
+        if name not in ("powershell", "pwsh"):
+            continue
+        cmdline = " ".join(str(c) for c in proc["cmdline"])
+        if "codex.exe" not in cmdline.lower():
+            continue
+        match = re.search(r"Set-Location\s+-LiteralPath\s+'([^']+)'", cmdline)
+        path = match.group(1) if match else None
+        if not path or (norm_filter and _norm_path(path) != norm_filter):
+            continue
+        results.append({"pid": proc["pid"], "path": path})
+    return results
+
+
+def _attach_session_counts(apps: list[dict[str, Any]], processes: list[dict[str, Any]]) -> None:
+    for key, finder in (("claudeSessions", _find_claude_sessions), ("codexSessions", _find_codex_sessions)):
+        counts: dict[str, int] = {}
+        for session in finder(processes=processes):
+            path = _norm_path(session.get("path"))
+            if path:
+                counts[path] = counts.get(path, 0) + 1
+        for app in apps:
+            app[key] = counts.get(_norm_path(app.get("localPath")), 0)
+
+
 @app.post("/api/apps/{name}/claude-sessions/kill-all")
 async def kill_app_claude_sessions(name: str) -> JSONResponse:
     entry = veda_apps.get_app(name)
@@ -540,6 +662,29 @@ async def kill_app_claude_sessions(name: str) -> JSONResponse:
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
     msg = f"terminated {killed} session(s)" if killed else "no sessions found"
+    return JSONResponse({"ok": True, "killed": killed, "message": msg})
+
+
+@app.post("/api/apps/{name}/codex-sessions/kill-all")
+async def kill_app_codex_sessions(name: str) -> JSONResponse:
+    entry = veda_apps.get_app(name)
+    if not entry:
+        return JSONResponse({"ok": False, "error": f"unknown app: {name}"}, status_code=404)
+    sessions = _find_codex_sessions(app_path=entry.get("localPath"))
+    killed = 0
+    for session in sessions:
+        try:
+            root = psutil.Process(session["pid"])
+            processes = root.children(recursive=True) + [root]
+            for process in processes:
+                process.terminate()
+            gone, alive = psutil.wait_procs(processes, timeout=2)
+            for process in alive:
+                process.kill()
+            killed += 1
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    msg = f"terminated {killed} Codex session(s)" if killed else "no Codex sessions found"
     return JSONResponse({"ok": True, "killed": killed, "message": msg})
 
 

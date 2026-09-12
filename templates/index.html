@@ -39,7 +39,7 @@
       /* Labels — iOS translucent label vocabulary over glass */
       --label-primary:    rgba(255,255,255,0.97);
       --label-secondary:  rgba(255,255,255,0.78);
-      --label-tertiary:   rgba(255,255,255,0.58);
+      --label-tertiary:   rgba(255,255,255,0.72);
       --label-quaternary: rgba(255,255,255,0.32);
 
       /* Apple system semantic colors (dark-mode variants) */
@@ -53,7 +53,7 @@
       --sys-gray:    #98989F;
 
       /* Glass material */
-      --glass-fill:      linear-gradient(165deg, rgba(255,255,255,0.16), rgba(255,255,255,0.05) 45%, rgba(255,255,255,0.09));
+      --glass-fill:      linear-gradient(165deg, rgba(36,53,72,0.86), rgba(12,24,39,0.84) 45%, rgba(18,32,49,0.88));
       --glass-fill-hi:   linear-gradient(165deg, rgba(255,255,255,0.22), rgba(255,255,255,0.08) 45%, rgba(255,255,255,0.12));
       --glass-border:    rgba(255,255,255,0.20);
       --glass-hairline:  rgba(255,255,255,0.10);
@@ -78,18 +78,23 @@
       min-height: 100dvh;
       font-family: var(--font-sans);
       color: var(--label-primary);
-      text-shadow: 0 1px 4px rgba(0,0,0,0.5), 0 1px 1px rgba(0,0,0,0.4);
+      text-shadow: 0 1px 1px rgba(0,0,0,0.25);
       -webkit-font-smoothing: antialiased;
       position: relative;
       overflow-x: hidden;
     }
 
-    /* Fixed wallpaper + legibility scrim — separate fixed layers so mobile
-       Safari's flaky background-attachment:fixed never enters the picture. */
+    /* Fixed wallpaper + legibility scrim.  Use the largest mobile viewport
+       unit so Chrome's collapsing URL bar reveals more wallpaper instead of
+       resizing its cover crop and making the image jump. */
     body::before {
       content: "";
       position: fixed;
-      inset: 0;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100vh;
+      height: 100lvh;
       z-index: -2;
       background: url('/static/wallpaper.jpg') center 30% / cover no-repeat;
     }
@@ -147,7 +152,7 @@
       position: relative;
       overflow: hidden;
       border-radius: var(--radius-panel);
-      background: var(--glass-fill);
+      background: linear-gradient(165deg, rgba(36,53,72,0.36), rgba(12,24,39,0.30) 45%, rgba(18,32,49,0.38));
       border: 1px solid var(--glass-border);
       backdrop-filter: blur(var(--glass-blur)) saturate(180%);
       -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
@@ -161,7 +166,7 @@
     .panel::before {
       content: "";
       position: absolute; inset: 0;
-      background: radial-gradient(560px 320px at 12% -12%, rgba(255,255,255,0.35), transparent 55%);
+      background: radial-gradient(560px 320px at 12% -12%, rgba(255,255,255,0.12), transparent 55%);
       mix-blend-mode: overlay;
       pointer-events: none;
     }
@@ -271,12 +276,21 @@
       margin-top: 3px;
     }
     .mono-line.accent { color: var(--sys-teal); }
+    .health-line.online { color: var(--sys-green); }
+    .health-line.offline { color: var(--sys-red); }
+    .health-line.waiting { color: var(--label-tertiary); }
 
     .row-actions {
       display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px;
       width: 100%; max-width: none; flex-shrink: 0;
       justify-content: flex-start; align-content: center;
     }
+    .codex-control { display: inline-flex; flex-shrink: 0; isolation: isolate; }
+    .codex-control .btn-pill { border-radius: 0; }
+    .codex-control .btn-pill + .btn-pill { margin-left: -1px; }
+    .codex-control .btn-pill:first-child { border-radius: var(--radius-pill) 0 0 var(--radius-pill); }
+    .codex-control .btn-pill:last-child { border-radius: 0 var(--radius-pill) var(--radius-pill) 0; }
+    .codex-control .btn-pill:focus-visible { position: relative; z-index: 1; }
 
     .empty-row { padding: 26px 18px; font-size: 12.5px; color: var(--label-tertiary); }
 
@@ -580,6 +594,15 @@
       return b;
     }
 
+    function btnGroup(label, buttons) {
+      const group = document.createElement("div");
+      group.className = "codex-control";
+      group.setAttribute("role", "group");
+      group.setAttribute("aria-label", label);
+      buttons.forEach(button => group.appendChild(button));
+      return group;
+    }
+
     // action() — pendingLabel keeps button in "Restarting…" state during postDelay
     async function action(b, url, body, postDelay = 600, silentRefresh = false, pendingLabel = null) {
       const all = b.parentElement.querySelectorAll("button");
@@ -665,6 +688,16 @@
       return m;
     }
 
+    function healthLine(health) {
+      const h = document.createElement("div");
+      const labels = { online: "Online", offline: "Offline", waiting: "Waiting for VM" };
+      const state = health?.state || "offline";
+      h.textContent = `Public health: ${labels[state] || "Unknown"}${health?.status ? ` · HTTP ${health.status}` : ""}`;
+      h.className = "mono-line health-line " + state;
+      h.title = health?.url || h.textContent;
+      return h;
+    }
+
     function fmtImageDate(s) {
       if (!s) return "";
       const d = new Date(s.replace(" UTC", "").replace(" +0000", "Z").replace(" ", "T"));
@@ -736,11 +769,13 @@
       const running = a.status === "running";
       const mon = a.monitorable !== false;
       const n = a.claudeSessions || 0;
+      const codexSessions = a.codexSessions || 0;
       const enc = encodeURIComponent(a.name);
       const cells = [leadLine(displayName || a.name, running, mon)];
       if (a.description) cells.push(descLine(a.description));
       if (a.runCmd) cells.push(monoLine(a.runCmd));
       if (n > 0) cells.push(monoLine(`claude  ×${n}`, false));
+      if (codexSessions > 0) cells.push(monoLine(`codex  ×${codexSessions}`, false));
       const btns = [];
       if (a.runCmd) {
         btns.push(running
@@ -749,10 +784,20 @@
         btns.push(btn("Restart", "restart", (b) => action(b, `/api/apps/${enc}/restart`, undefined, 5000, true, "Restarting…")));
       }
       if (a.localPath) {
-        btns.push(btn("Claude", "shell", (b) => action(b, `/api/apps/${enc}/shell`)));
-      }
-      if (n > 0) {
-        btns.push(btn(`Kill ×${n}`, "stop", (b) => action(b, `/api/apps/${enc}/claude-sessions/kill-all`)));
+        const openClaude = btn("Claude", "shell", (b) => action(b, `/api/apps/${enc}/shell`));
+        if (n > 0) {
+          const endClaude = btn(`End ×${n}`, "stop", (b) => action(b, `/api/apps/${enc}/claude-sessions/kill-all`));
+          btns.push(btnGroup("Claude controls", [openClaude, endClaude]));
+        } else {
+          btns.push(openClaude);
+        }
+        const openCodex = btn("Codex", "shell", (b) => action(b, `/api/apps/${enc}/codex`));
+        if (codexSessions > 0) {
+          const endCodex = btn(`End ×${codexSessions}`, "stop", (b) => action(b, `/api/apps/${enc}/codex-sessions/kill-all`));
+          btns.push(btnGroup("Codex controls", [openCodex, endCodex]));
+        } else {
+          btns.push(openCodex);
+        }
       }
       return row(cells, btns);
     }
@@ -947,6 +992,8 @@
         const running = vm.status === "running";
         const cells = [leadLine(vm.name, running)];
         if (vm.vmx) cells.push(monoLine(vm.vmx.split(/[\\/]/).pop()));
+        if (!running && vm.desiredRunning) cells.push(descLine("Auto-recovery enabled"));
+        if (vm.health) cells.push(healthLine(vm.health));
         const toggleBtn = running
           ? btn("Stop",  "stop",  (b) => action(b, "/api/vmware/stop",  { vmx: vm.vmx, force: false }))
           : btn("Start", "start", (b) => action(b, "/api/vmware/start", { vmx: vm.vmx, gui: false }));
