@@ -13,13 +13,14 @@ import socket
 import subprocess
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import psutil
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from services import docker_service, veda_apps, vmware_service
+from services import docker_service, nginx_proxy, veda_apps, vmware_service
 
 BASE_DIR = Path(__file__).resolve().parent
 INDEX_HTML = BASE_DIR / "templates" / "index.html"
@@ -265,7 +266,21 @@ def _apps_with_sessions() -> list[dict[str, Any]]:
     result = veda_apps.list_apps(processes)
     _attach_session_counts(result, processes)
     _attach_run_modes(result)
+    _attach_public_urls(result)
     return result
+
+
+def _attach_public_urls(apps: list[dict[str, Any]]) -> None:
+    """Link each app to the address it is reachable at from outside, as routed
+    by Nginx Proxy Manager. Dev and container now share a port per app, so the
+    same link works in either mode."""
+    urls = nginx_proxy.public_urls()
+    if not urls:
+        return
+    for entry in apps:
+        port = _dev_port(entry)
+        if port:
+            entry["url"] = urls.get(port)
 
 
 def _attach_run_modes(apps: list[dict[str, Any]]) -> None:
@@ -595,6 +610,29 @@ async def app_set_mode(name: str, payload: dict[str, Any]) -> JSONResponse:
 # ----------------------------------------------------------------------------
 # Docker
 # ----------------------------------------------------------------------------
+_PUBLISHED_PORT = re.compile(r":(\d+)->")
+
+
+def _attach_container_urls(containers: list[dict[str, Any]]) -> None:
+    urls = nginx_proxy.public_urls()
+    if not urls:
+        return
+    for container in containers:
+        candidates: list[str] = []
+        for match in _PUBLISHED_PORT.finditer(container.get("ports") or ""):
+            url = urls.get(int(match.group(1)))
+            if url and url not in candidates:
+                candidates.append(url)
+        if not candidates:
+            continue
+        # A container can publish several ports — pourover-guide-app answers on
+        # both the domain root and /coffee. The path-scoped route names this app
+        # specifically, so it beats a root catch-all.
+        container["url"] = next(
+            (u for u in candidates if urlparse(u).path.strip("/")), candidates[0]
+        )
+
+
 def _docker_with_filter() -> dict[str, Any]:
     result = docker_service.list_containers()
     filters = _load_settings().get("docker", {}).get("filter", [])
@@ -603,6 +641,7 @@ def _docker_with_filter() -> dict[str, Any]:
         result["containers"] = _apply_docker_filter(result["containers"], filters)
         result["filtered"] = bool(filters)
         result["filterList"] = filters
+        _attach_container_urls(result["containers"])
     return result
 
 

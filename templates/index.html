@@ -62,6 +62,7 @@
       --radius-panel:    20px;
       --radius-row:      14px;
       --radius-pill:     999px;
+      --name-col:        250px;
 
       --shadow-panel: 0 24px 48px -16px rgba(0,0,0,0.55), 0 2px 10px rgba(0,0,0,0.30);
       --shadow-float: 0 10px 28px -8px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3);
@@ -248,6 +249,9 @@
       border-radius: var(--radius-pill);
       transition: color 150ms ease, transform 180ms cubic-bezier(.2,.8,.2,1), background 150ms ease;
     }
+    /* Rows with nothing to disclose still reserve the slot, so the pills and
+       controls of every row share one right edge. */
+    .disclosure-spacer { flex-shrink: 0; width: 22px; }
     .disclosure:hover { color: var(--label-secondary); background: rgba(255,255,255,0.10); }
     .disclosure:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(10,132,255,0.55); }
     .row.expanded > .row-main > .disclosure,
@@ -261,10 +265,11 @@
       padding: 8px 14px 0;
       font-size: 13px; font-weight: 700; color: var(--label-primary);
     }
-    .app-group-sub { padding-left: 24px; border-top: none; }
+    .app-group-sub { border-top: none; }
+    .app-group-sub .lead-line { padding-left: 24px; }
     .app-group-sub .name-text { font-size: 11px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--label-secondary); }
 
-    .row-content { flex: 1; min-width: 0; padding-right: 2px; }
+    .row-content { flex: 0 0 var(--name-col); min-width: 0; padding-right: 2px; }
     .lead-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .status-dot {
       width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
@@ -279,6 +284,16 @@
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       min-width: 0; flex-shrink: 1;
     }
+    a.name-text {
+      color: var(--label-primary); text-decoration: none;
+      display: inline-flex; align-items: center; gap: 5px;
+      transition: color 150ms ease;
+    }
+    a.name-text:hover { color: var(--sys-blue); text-decoration: underline; text-underline-offset: 2px; }
+    a.name-text:focus-visible { outline: none; color: var(--sys-blue); text-decoration: underline; }
+    a.name-text svg { flex-shrink: 0; opacity: 0.5; transition: opacity 150ms ease; }
+    a.name-text:hover svg { opacity: 1; }
+
     .pill-badge {
       margin-left: 8px; flex-shrink: 0;
       font-size: 9.5px; font-weight: 700; letter-spacing: 0.02em;
@@ -473,13 +488,12 @@
       .btn-pill { padding: 0 10px; }
       .cfg-row { padding: 9px 12px; }
       .app-group-head { padding: 8px 12px 0; }
-      .app-group-sub { padding-left: 18px; }
+      .app-group-sub .lead-line { padding-left: 18px; }
       /* Too many controls for one phone-width line - let them wrap below. */
       .row-main { flex-wrap: wrap; row-gap: 6px; }
       .row-content { flex: 1 1 auto; }
       .row-actions { flex-wrap: wrap; justify-content: flex-start; margin-left: 0; flex: 1 1 100%; order: 3; }
       .row-detail { padding-left: 16px; }
-      .pill-badge { margin-left: auto; }
     }
   </style>
 </head>
@@ -723,6 +737,12 @@
       content.appendChild(cells[0]);
       main.appendChild(content);
 
+      // leadLine() builds the pill next to the name; lift it out so it sits in
+      // its own column right after the fixed-width name box, where every row's
+      // pill shares one left edge.
+      const pill = content.querySelector(".pill-badge");
+      if (pill) main.appendChild(pill);
+
       if (actionBtns.length) {
         const actions = document.createElement("div");
         actions.className = "row-actions";
@@ -732,6 +752,7 @@
 
       const details = cells.slice(1);
       if (!details.length) {
+        main.appendChild(el("span", "disclosure-spacer"));
         r.appendChild(main);
         return r;
       }
@@ -761,14 +782,26 @@
     }
 
     // ---------- cell builders ----------
-    function leadLine(name, isRunning, monitorable = true) {
+    const LINK_ICON = '<svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2H2.5v7.5H10V7.5"/><path d="M7 2h3v3"/><path d="M10 2L5.5 6.5"/></svg>';
+
+    // url makes the name a link straight to the app's public address.
+    function leadLine(name, isRunning, monitorable = true, url = null) {
       const line1 = document.createElement("div");
       line1.className = "lead-line";
       if (monitorable) line1.appendChild(statusDot(isRunning));
-      const n = document.createElement("span");
-      n.textContent = name;
+      const n = document.createElement(url ? "a" : "span");
       n.className = "name-text";
-      n.title = name;
+      if (url) {
+        n.href = url;
+        n.target = "_blank";
+        n.rel = "noopener noreferrer";
+        n.title = url;
+        n.appendChild(document.createTextNode(name));
+        n.insertAdjacentHTML("beforeend", LINK_ICON);
+      } else {
+        n.textContent = name;
+        n.title = name;
+      }
       line1.appendChild(n);
       if (monitorable) line1.appendChild(statusPill(isRunning));
       return line1;
@@ -873,7 +906,8 @@
       const n = a.claudeSessions || 0;
       const codexSessions = a.codexSessions || 0;
       const enc = encodeURIComponent(a.name);
-      const cells = [leadLine(displayName || a.name, running, mon)];
+      const cells = [leadLine(displayName || a.name, running, mon, a.url)];
+      if (a.url) cells.push(monoLine(a.url, true));
       if (a.description) cells.push(descLine(a.description));
       const devCmd = a.devCmd || a.runCmd;
       if (a.mode === "docker" && a.containerName) cells.push(monoLine(`docker  ${a.containerName}`));
@@ -1031,7 +1065,8 @@
       }
       list.forEach((c) => {
         const running = c.status === "running";
-        const cells = [leadLine(c.name, running)];
+        const cells = [leadLine(c.name, running, true, c.url)];
+        if (c.url) cells.push(monoLine(c.url, true));
         if (c.image) cells.push(descLine(c.image));
         if (c.ports) {
           cells.push(monoLine(c.ports, true));
@@ -1140,7 +1175,10 @@
       if (!list.length) { body.appendChild(emptyRow("No running VMs.")); return; }
       list.forEach((vm) => {
         const running = vm.status === "running";
-        const cells = [leadLine(vm.name, running)];
+        // The VM's health URL is an endpoint, not a page — link its origin.
+        let vmUrl = null;
+        try { vmUrl = vm.health?.url ? new URL(vm.health.url).origin + "/" : null; } catch (_) {}
+        const cells = [leadLine(vm.name, running, true, vmUrl)];
         if (vm.vmx) cells.push(monoLine(vm.vmx.split(/[\\/]/).pop()));
         if (!running && vm.desiredRunning) cells.push(descLine("Auto-recovery enabled"));
         if (vm.health) cells.push(healthLine(vm.health));
