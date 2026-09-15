@@ -5,14 +5,16 @@ venv/
 env/
 *.log
 .env
+.env.*
+!.env.example
 .DS_Store
 .idea/
 .vscode/
 *.egg-info/
 
 # scratch / one-shot helpers
-_register.py
-_selfcheck.py
+_*.py
+_*.png
 _*.log
 _uvicorn.*
 
