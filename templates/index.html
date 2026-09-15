@@ -59,8 +59,8 @@
       --glass-hairline:  rgba(255,255,255,0.10);
       --glass-blur:      28px;
       --glass-blur-btn:  10px;
-      --radius-panel:    26px;
-      --radius-row:      18px;
+      --radius-panel:    20px;
+      --radius-row:      14px;
       --radius-pill:     999px;
 
       --shadow-panel: 0 24px 48px -16px rgba(0,0,0,0.55), 0 2px 10px rgba(0,0,0,0.30);
@@ -107,25 +107,25 @@
         linear-gradient(180deg, rgba(4,10,20,0.5) 0px, rgba(4,10,20,0.18) 180px, transparent 340px);
     }
 
-    .wrap { max-width: 840px; margin: 0 auto; padding: 0 20px 64px; }
+    .wrap { max-width: 840px; margin: 0 auto; padding: 0 20px 40px; }
 
     /* ---------- Header ---------- */
     header.top {
-      padding: 28px 4px 26px;
+      padding: 18px 4px 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
     header.top h1 {
       margin: 0;
-      font-size: 26px;
+      font-size: 21px;
       font-weight: 700;
       letter-spacing: -0.01em;
       color: var(--label-primary);
       text-shadow: 0 1px 8px rgba(0,0,0,0.35);
     }
     .icon-btn {
-      width: 40px; height: 40px;
+      width: 32px; height: 32px;
       border-radius: var(--radius-pill);
       border: 1px solid var(--glass-border);
       background: var(--glass-fill);
@@ -144,7 +144,8 @@
     .icon-btn:focus-visible, .btn-pill:focus-visible, .chip-x:focus-visible {
       outline: none; box-shadow: 0 0 0 3px rgba(10,132,255,0.55), var(--shadow-float);
     }
-    .header-actions { display: flex; gap: 12px; flex-shrink: 0; }
+    .header-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .icon-btn.is-active { background: rgba(10,132,255,0.28); border-color: rgba(10,132,255,0.55); color: #cfe6ff; }
     .icon-btn { flex-shrink: 0; }
 
     /* ---------- Glass panel (section) ---------- */
@@ -157,7 +158,7 @@
       backdrop-filter: blur(var(--glass-blur)) saturate(180%);
       -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
       box-shadow: var(--shadow-panel), 0 1px 0 rgba(255,255,255,0.18) inset, 0 -1px 0 rgba(0,0,0,0.14) inset;
-      margin-bottom: 22px;
+      margin-bottom: 12px;
       opacity: 0;
       transform: translateY(10px) scale(0.99);
       filter: blur(6px);
@@ -180,21 +181,21 @@
     .panel-head {
       position: relative;
       display: flex; align-items: center; justify-content: space-between;
-      gap: 10px;
-      padding: 16px 18px 12px;
+      gap: 8px;
+      padding: 10px 14px 8px;
     }
     .panel-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .section-icon {
-      width: 28px; height: 28px; flex-shrink: 0;
-      border-radius: 8px;
+      width: 22px; height: 22px; flex-shrink: 0;
+      border-radius: 7px;
       display: flex; align-items: center; justify-content: center;
       box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 3px 6px -1px rgba(0,0,0,0.35);
     }
-    .section-icon svg { width: 16px; height: 16px; filter: drop-shadow(0 1px 1.5px rgba(0,0,0,0.4)); }
+    .section-icon svg { width: 13px; height: 13px; filter: drop-shadow(0 1px 1.5px rgba(0,0,0,0.4)); }
     .icon-wifi svg { filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7)); }
     .panel-title h2 {
       margin: 0;
-      font-size: 12px; font-weight: 700;
+      font-size: 11px; font-weight: 700;
       letter-spacing: 0.07em; text-transform: uppercase;
       color: var(--label-secondary);
     }
@@ -206,7 +207,7 @@
     .seg { display: flex; gap: 2px; flex-shrink: 0; background: rgba(255,255,255,0.08); padding: 2px; border-radius: var(--radius-pill); border: 1px solid var(--glass-border); }
     .seg button {
       font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
-      background: none; border: none; padding: 5px 11px; border-radius: var(--radius-pill);
+      background: none; border: none; padding: 4px 10px; border-radius: var(--radius-pill);
       color: var(--label-tertiary); cursor: pointer; transition: all 150ms ease;
       text-shadow: 0 1px 2px rgba(0,0,0,0.35);
     }
@@ -216,30 +217,52 @@
       font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
       color: var(--label-secondary); background: rgba(255,255,255,0.08);
       border: 1px solid var(--glass-border); border-radius: var(--radius-pill);
-      padding: 5px 12px; cursor: pointer; transition: all 150ms ease;
+      padding: 4px 11px; cursor: pointer; transition: all 150ms ease;
     }
     .chip-btn:hover { background: rgba(255,255,255,0.16); color: var(--label-primary); }
 
     /* ---------- Rows ---------- */
     .rows { position: relative; }
     .row {
-      display: flex; flex-direction: column; align-items: stretch; gap: 10px;
-      padding: 13px 18px;
+      padding: 6px 14px;
       border-top: 1px solid var(--glass-hairline);
       transition: background-color 150ms ease;
     }
     .rows > .row:first-child { border-top: none; }
     .row:hover { background: rgba(255,255,255,0.05); }
 
+    /* One compact line: name + status, actions, disclosure. */
+    .row-main { display: flex; align-items: center; gap: 10px; min-height: 30px; }
+
+    /* Description / command / ports / health live here - hidden until the row
+       is expanded, or until the header "Details" toggle turns them all on. */
+    .row-detail { display: none; padding: 0 0 6px 16px; }
+    .row.expanded > .row-detail,
+    body.details-on .row-detail { display: block; }
+
+    .disclosure {
+      flex-shrink: 0; width: 22px; height: 22px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      border: none; background: none; cursor: pointer;
+      color: var(--label-quaternary);
+      border-radius: var(--radius-pill);
+      transition: color 150ms ease, transform 180ms cubic-bezier(.2,.8,.2,1), background 150ms ease;
+    }
+    .disclosure:hover { color: var(--label-secondary); background: rgba(255,255,255,0.10); }
+    .disclosure:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(10,132,255,0.55); }
+    .row.expanded > .row-main > .disclosure,
+    body.details-on .disclosure { transform: rotate(90deg); color: var(--label-secondary); }
+
     /* Grouped app card — one app name, independent frontend/backend sub-rows */
-    .app-group { border-top: 1px solid var(--glass-hairline); padding-bottom: 4px; }
+    .app-group { border-top: 1px solid var(--glass-hairline); padding-bottom: 2px; }
     .rows > .app-group:first-child { border-top: none; }
     .app-group-head {
-      padding: 13px 18px 2px;
-      font-size: 15px; font-weight: 700; color: var(--label-primary);
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 14px 0;
+      font-size: 13px; font-weight: 700; color: var(--label-primary);
     }
-    .app-group-sub { padding-left: 30px; border-top: none; }
-    .app-group-sub .name-text { font-size: 12.5px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--label-secondary); }
+    .app-group-sub { padding-left: 24px; border-top: none; }
+    .app-group-sub .name-text { font-size: 11px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--label-secondary); }
 
     .row-content { flex: 1; min-width: 0; padding-right: 2px; }
     .lead-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -252,28 +275,28 @@
       background: var(--sys-green);
     }
     .name-text {
-      font-size: 15px; font-weight: 600; color: var(--label-primary);
+      font-size: 13.5px; font-weight: 600; color: var(--label-primary);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       min-width: 0; flex-shrink: 1;
     }
     .pill-badge {
-      margin-left: auto; flex-shrink: 0;
-      font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
-      padding: 3px 10px; border-radius: var(--radius-pill);
+      margin-left: 8px; flex-shrink: 0;
+      font-size: 9.5px; font-weight: 700; letter-spacing: 0.02em;
+      padding: 2px 8px; border-radius: var(--radius-pill);
       border: 1px solid transparent;
     }
     .pill-badge.on  { color: var(--sys-green); background: rgba(48,209,88,0.16); border-color: rgba(48,209,88,0.32); }
     .pill-badge.off { color: var(--label-tertiary); background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
 
     .desc-line {
-      font-size: 12.5px; color: var(--label-secondary);
+      font-size: 11.5px; color: var(--label-secondary);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      margin-top: 3px; line-height: 1.4;
+      margin-top: 2px; line-height: 1.35;
     }
     .mono-line {
-      font-size: 10.5px; font-family: var(--font-mono); color: var(--label-tertiary);
+      font-size: 10px; font-family: var(--font-mono); color: var(--label-tertiary);
       letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      margin-top: 3px;
+      margin-top: 2px;
     }
     .mono-line.accent { color: var(--sys-teal); }
     .health-line.online { color: var(--sys-green); }
@@ -281,9 +304,9 @@
     .health-line.waiting { color: var(--label-tertiary); }
 
     .row-actions {
-      display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px;
-      width: 100%; max-width: none; flex-shrink: 0;
-      justify-content: flex-start; align-content: center;
+      display: flex; flex-direction: row; flex-wrap: nowrap; gap: 5px;
+      flex-shrink: 0; margin-left: auto;
+      justify-content: flex-end; align-items: center;
     }
     .codex-control { display: inline-flex; flex-shrink: 0; isolation: isolate; }
     .codex-control .btn-pill { border-radius: 0; }
@@ -292,16 +315,33 @@
     .codex-control .btn-pill:last-child { border-radius: 0 var(--radius-pill) var(--radius-pill) 0; }
     .codex-control .btn-pill:focus-visible { position: relative; z-index: 1; }
 
-    .empty-row { padding: 26px 18px; font-size: 12.5px; color: var(--label-tertiary); }
+    /* Dev / Docker run-mode switch, shown only for apps that have both. */
+    .mode-seg {
+      display: flex; gap: 2px; flex-shrink: 0;
+      background: rgba(255,255,255,0.08); padding: 2px;
+      border-radius: var(--radius-pill); border: 1px solid var(--glass-border);
+    }
+    .mode-seg button {
+      font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+      background: none; border: none; padding: 3px 9px; border-radius: var(--radius-pill);
+      color: var(--label-tertiary); cursor: pointer; transition: all 150ms ease;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+    }
+    .mode-seg button:hover:not(.active) { color: var(--label-primary); }
+    .mode-seg button.active { background: rgba(255,255,255,0.20); color: var(--label-primary); cursor: default; }
+    .mode-seg button.active.docker { background: rgba(10,132,255,0.32); color: #cfe6ff; }
+    .mode-seg button:disabled:not(.active) { opacity: 0.4; cursor: not-allowed; }
+
+    .empty-row { padding: 16px 14px; font-size: 12px; color: var(--label-tertiary); }
 
     /* ---------- Pill buttons ---------- */
     .btn-pill {
-      width: auto; height: 30px; padding: 0 14px;
+      width: auto; height: 25px; padding: 0 11px;
       border-radius: var(--radius-pill);
       border: 1px solid var(--glass-border);
       background: rgba(255,255,255,0.08);
       color: var(--label-secondary);
-      font-family: var(--font-sans); font-size: 11px; font-weight: 700;
+      font-family: var(--font-sans); font-size: 10.5px; font-weight: 700;
       letter-spacing: 0.02em;
       cursor: pointer; white-space: nowrap;
       display: flex; align-items: center; justify-content: center;
@@ -328,16 +368,16 @@
     .sk { background: rgba(255,255,255,0.22); border-radius: 5px; animation: skPulse 1.5s ease-in-out infinite; flex-shrink: 0; }
 
     /* ---------- Config tab ---------- */
-    .cfg-row { padding: 14px 18px; border-top: 1px solid var(--glass-hairline); }
+    .cfg-row { padding: 9px 14px; border-top: 1px solid var(--glass-hairline); }
     .rows > .cfg-row:first-child { border-top: none; }
-    .cfg-name { font-size: 15px; font-weight: 600; color: var(--label-primary); margin-bottom: 6px; }
-    .cfg-field { display: flex; gap: 10px; align-items: baseline; min-width: 0; margin-top: 4px; }
+    .cfg-name { font-size: 13.5px; font-weight: 600; color: var(--label-primary); margin-bottom: 4px; }
+    .cfg-field { display: flex; gap: 10px; align-items: baseline; min-width: 0; margin-top: 2px; }
     .cfg-field .k {
       font-size: 9.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
-      color: var(--label-tertiary); flex-shrink: 0; width: 52px;
+      color: var(--label-tertiary); flex-shrink: 0; width: 46px;
     }
     .cfg-field .v {
-      font-size: 11.5px; font-family: var(--font-mono); letter-spacing: 0.01em;
+      font-size: 11px; font-family: var(--font-mono); letter-spacing: 0.01em;
       color: var(--label-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .cfg-field .v.accent { color: var(--sys-teal); }
@@ -424,16 +464,22 @@
     .btn-modal:active { transform: scale(0.96); }
 
     @media (max-width: 620px) {
-      .wrap { padding: 0 14px 48px; }
-      header.top { padding: 20px 2px 20px; }
-      header.top h1 { font-size: 22px; }
-      .panel { border-radius: 22px; }
-      .panel-head { padding: 14px 14px 10px; flex-wrap: wrap; row-gap: 10px; }
-      .row { padding: 14px 16px; }
-      .btn-pill { padding: 0 16px; }
-      .cfg-row { padding: 13px 16px; }
-      .app-group-head { padding: 13px 16px 2px; }
-      .app-group-sub { padding-left: 22px; }
+      .wrap { padding: 0 12px 32px; }
+      header.top { padding: 14px 2px 12px; }
+      header.top h1 { font-size: 19px; }
+      .panel { border-radius: 18px; }
+      .panel-head { padding: 10px 12px 8px; flex-wrap: wrap; row-gap: 8px; }
+      .row { padding: 6px 12px; }
+      .btn-pill { padding: 0 10px; }
+      .cfg-row { padding: 9px 12px; }
+      .app-group-head { padding: 8px 12px 0; }
+      .app-group-sub { padding-left: 18px; }
+      /* Too many controls for one phone-width line - let them wrap below. */
+      .row-main { flex-wrap: wrap; row-gap: 6px; }
+      .row-content { flex: 1 1 auto; }
+      .row-actions { flex-wrap: wrap; justify-content: flex-start; margin-left: 0; flex: 1 1 100%; order: 3; }
+      .row-detail { padding-left: 16px; }
+      .pill-badge { margin-left: auto; }
     }
   </style>
 </head>
@@ -448,6 +494,11 @@
     <header class="top">
       <h1>Dashboard</h1>
       <div class="header-actions">
+        <button id="detailsBtn" class="icon-btn" onclick="toggleDetails()" title="Show details" aria-label="Show details" aria-pressed="false">
+          <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <path d="M2 3h8M2 6h8M2 9h5"/>
+          </svg>
+        </button>
         <button id="refreshBtn" class="icon-btn" onclick="refreshAll()" title="Refresh" aria-label="Refresh">
           <svg id="refreshIcon" width="15" height="15" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M10.5 6A4.5 4.5 0 1 1 8 2.1"/>
@@ -641,20 +692,71 @@
       }
     }
 
-    // Row factory
-    function row(cells, actionBtns) {
+    // ---------- detail disclosure ----------
+    // Rows render one compact line; cells[1..] are detail and stay collapsed
+    // until this row is expanded or the header toggle reveals every row.
+    const CHEVRON = '<svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4.5,2 8.5,6 4.5,10"/></svg>';
+
+    // Keyed so a 10s auto-refresh doesn't collapse rows the user opened.
+    const _expanded = new Set();
+
+    function toggleDetails(force) {
+      const on = force === undefined ? !document.body.classList.contains("details-on") : force;
+      document.body.classList.toggle("details-on", on);
+      const b = document.getElementById("detailsBtn");
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.title = on ? "Hide details" : "Show details";
+      try { localStorage.setItem("veda.details", on ? "1" : "0"); } catch (_) {}
+    }
+
+    // Row factory — cells[0] is the always-visible line, the rest is detail.
+    function row(cells, actionBtns, key) {
       const r = document.createElement("div");
       r.className = "row";
+      if (key) r.dataset.key = key;
+
+      const main = document.createElement("div");
+      main.className = "row-main";
       const content = document.createElement("div");
       content.className = "row-content";
-      cells.forEach(c => content.appendChild(c));
-      r.appendChild(content);
+      content.appendChild(cells[0]);
+      main.appendChild(content);
+
       if (actionBtns.length) {
         const actions = document.createElement("div");
         actions.className = "row-actions";
         actionBtns.forEach(b => actions.appendChild(b));
-        r.appendChild(actions);
+        main.appendChild(actions);
       }
+
+      const details = cells.slice(1);
+      if (!details.length) {
+        r.appendChild(main);
+        return r;
+      }
+
+      const tog = document.createElement("button");
+      tog.className = "disclosure";
+      tog.innerHTML = CHEVRON;
+      tog.setAttribute("aria-label", "Toggle details");
+      main.appendChild(tog);
+
+      const det = document.createElement("div");
+      det.className = "row-detail";
+      details.forEach(c => det.appendChild(c));
+
+      r.appendChild(main);
+      r.appendChild(det);
+
+      const open = !!key && _expanded.has(key);
+      r.classList.toggle("expanded", open);
+      tog.setAttribute("aria-expanded", open ? "true" : "false");
+      tog.onclick = () => {
+        const now = r.classList.toggle("expanded");
+        tog.setAttribute("aria-expanded", now ? "true" : "false");
+        if (key) { if (now) _expanded.add(key); else _expanded.delete(key); }
+      };
       return r;
     }
 
@@ -773,10 +875,14 @@
       const enc = encodeURIComponent(a.name);
       const cells = [leadLine(displayName || a.name, running, mon)];
       if (a.description) cells.push(descLine(a.description));
-      if (a.runCmd) cells.push(monoLine(a.runCmd));
+      const devCmd = a.devCmd || a.runCmd;
+      if (a.mode === "docker" && a.containerName) cells.push(monoLine(`docker  ${a.containerName}`));
+      else if (devCmd) cells.push(monoLine(devCmd));
+      if (a.supportsModes && a.containerStatus) cells.push(monoLine(`container  ${a.containerName}  ·  ${a.containerStatus}`));
       if (n > 0) cells.push(monoLine(`claude  ×${n}`, false));
       if (codexSessions > 0) cells.push(monoLine(`codex  ×${codexSessions}`, false));
       const btns = [];
+      if (a.supportsModes) btns.push(modeSeg(a));
       if (a.runCmd) {
         btns.push(running
           ? btn("Stop",    "stop",  (b) => action(b, `/api/apps/${enc}/stop`))
@@ -799,7 +905,50 @@
           btns.push(openCodex);
         }
       }
-      return row(cells, btns);
+      return row(cells, btns, "app:" + a.name);
+    }
+
+    // Dev server vs container — one tap stops the losing side and starts the
+    // other, so the two never contend for the app's port.
+    function modeSeg(a) {
+      const wrap = document.createElement("div");
+      wrap.className = "mode-seg";
+      wrap.setAttribute("role", "group");
+      wrap.setAttribute("aria-label", a.name + " run mode");
+      const enc = encodeURIComponent(a.name);
+      [["dev", "Dev"], ["docker", "Docker"]].forEach(([mode, label]) => {
+        const b = document.createElement("button");
+        b.textContent = label;
+        b.className = (a.mode === mode ? "active " : "") + mode;
+        b.setAttribute("aria-pressed", a.mode === mode ? "true" : "false");
+        b.title = mode === "docker"
+          ? `Run in Docker (${a.containerName})`
+          : `Run as dev server (${a.runCmd || ""})`;
+        if (a.mode === mode) b.disabled = true;
+        else b.onclick = () => switchMode(wrap, enc, mode);
+        wrap.appendChild(b);
+      });
+      return wrap;
+    }
+
+    async function switchMode(wrap, enc, mode) {
+      const all = wrap.querySelectorAll("button");
+      all.forEach((x) => { x.disabled = true; });
+      try {
+        const res = await fetch(`/api/apps/${enc}/mode`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode }),
+        });
+        let data = {};
+        try { data = await res.json(); } catch (_) {}
+        const ok = res.ok && data.ok !== false;
+        toast(data.message || data.error || (ok ? "Switched" : "Switch failed"), ok);
+      } catch (e) {
+        toast(e.message || "Request failed", false);
+      } finally {
+        setTimeout(() => refreshAll(true), 1800);
+      }
     }
 
     // Group apps whose name follows the "<base>" / "<base>-frontend" /
@@ -865,14 +1014,15 @@
       const list = d.containers || [];
       const filtered = d.filtered && (d.filterList || []).length > 0;
       if (filtered) {
-        badge2.textContent = "filtered: " + d.filterList.join(", ");
+        badge2.textContent = `filtered ×${d.filterList.length}`;
+        badge2.title = d.filterList.join(", ");
         badge2.style.display = "";
       } else {
         badge2.style.display = "none";
       }
       if (d.error) {
         const fixBtn = btn("Fix Docker", "shell", (b) => action(b, "/api/docker/fix"));
-        body.appendChild(row([descLine("Error: " + d.error)], [fixBtn]));
+        body.appendChild(row([descLine("Error: " + d.error)], [fixBtn], "docker:error"));
         return;
       }
       if (!list.length) {
@@ -896,7 +1046,7 @@
         if (running) {
           btns.push(btn("Restart", "restart", (b) => action(b, `/api/docker/${enc}/restart`, undefined, 3000, true, "Restarting…")));
         }
-        body.appendChild(row(cells, btns));
+        body.appendChild(row(cells, btns, "ctr:" + c.name));
       });
     }
 
@@ -997,7 +1147,7 @@
         const toggleBtn = running
           ? btn("Stop",  "stop",  (b) => action(b, "/api/vmware/stop",  { vmx: vm.vmx, force: false }))
           : btn("Start", "start", (b) => action(b, "/api/vmware/start", { vmx: vm.vmx, gui: false }));
-        body.appendChild(row(cells, [toggleBtn]));
+        body.appendChild(row(cells, [toggleBtn], "vm:" + vm.name));
       });
     }
 
@@ -1072,7 +1222,7 @@
       if (connected && s.ip) cells.push(monoLine(s.ip, true));
       const toggleBtn = btn(connected ? "Disconnect" : "Connect", connected ? "stop" : "start", (b) => toggleTailscale(b));
       toggleBtn.dataset.connected = connected ? "1" : "0";
-      body.appendChild(row(cells, [toggleBtn]));
+      body.appendChild(row(cells, [toggleBtn], "tailscale"));
     }
 
     async function loadTailscale() {
@@ -1112,35 +1262,38 @@
       return b;
     }
 
-    function skRow(lines, btnCount = 1, rowDelay = 0) {
+    function skRow(width, btnCount = 1, rowDelay = 0) {
       const r = document.createElement("div");
       r.className = "row";
+      const main = document.createElement("div");
+      main.className = "row-main";
       const content = document.createElement("div");
       content.className = "row-content";
-      content.style.cssText = "display:flex; flex-direction:column; gap:6px;";
-      lines.forEach(([w, h], i) => content.appendChild(skBar(w, h, rowDelay + i * 60)));
-      r.appendChild(content);
+      content.appendChild(skBar(width, 13, rowDelay));
+      main.appendChild(content);
       if (btnCount) {
         const actions = document.createElement("div");
         actions.className = "row-actions";
-        for (let i = 0; i < btnCount; i++) actions.appendChild(skBar(72, 30, rowDelay + i * 80));
-        r.appendChild(actions);
+        for (let i = 0; i < btnCount; i++) actions.appendChild(skBar(58, 25, rowDelay + i * 80));
+        main.appendChild(actions);
       }
+      r.appendChild(main);
       return r;
     }
 
     function initSkeletons() {
-      const sk = (id, rows, btnCount) => {
+      const sk = (id, widths, btnCount) => {
         const body = document.getElementById(id);
         body.innerHTML = "";
-        rows.forEach((lines, i) => body.appendChild(skRow(lines, btnCount, i * 120)));
+        widths.forEach((w, i) => body.appendChild(skRow(w, btnCount, i * 100)));
       };
-      sk("tailscaleBody", [[[100, 15], [60, 10]]], 1);
-      sk("vedaBody",      [[[140,15],[90,10],[65,10]], [[120,15],[80,10]], [[160,15],[100,10],[55,10]]], 2);
-      sk("dockerBody",    [[[130,15],[85,10],[55,10]], [[110,15],[70,10]], [[145,15],[90,10]]], 1);
-      sk("vmwareBody",    [[[120,15],[75,10]], [[140,15],[85,10]]], 1);
+      sk("tailscaleBody", [100], 1);
+      sk("vedaBody",      [140, 120, 160], 2);
+      sk("dockerBody",    [130, 110, 145], 1);
+      sk("vmwareBody",    [120, 140], 1);
     }
 
+    try { toggleDetails(localStorage.getItem("veda.details") === "1"); } catch (_) {}
     initSkeletons();
     loadTailscale();
     setInterval(loadTailscale, 15000);

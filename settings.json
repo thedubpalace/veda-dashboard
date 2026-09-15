@@ -22,5 +22,23 @@
         "healthExpectedStatus": 401
       }
     ]
+  },
+  "apps": {
+    "flight-deal-watcher": {
+      "containerName": "flight-deal-watcher"
+    },
+    "pourover-guide": {
+      "containerName": "pourover-guide-app"
+    },
+    "asteroid-impact-simulation": {
+      "containerName": "asteroid-impact-simulation"
+    },
+    "akai-mpc-web": {
+      "devCmd": "npm run dev"
+    },
+    "daddy-medicine": {
+      "devCmd": "npm run dev",
+      "mode": "dev"
+    }
   }
 }

@@ -37,6 +37,103 @@ def _save_settings(data: dict[str, Any]) -> None:
     SETTINGS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+# ----------------------------------------------------------------------------
+# App run mode — "dev" (runCmd on this host) vs "docker" (the app's container).
+# An app that declares both a container and a real dev command can be flipped
+# between the two; the choice is persisted so start/stop/restart follow it.
+# ----------------------------------------------------------------------------
+def _is_docker_cmd(run_cmd: str | None) -> bool:
+    return bool(run_cmd) and run_cmd.strip().lower().startswith("docker")
+
+
+def _container_for(entry: dict[str, Any], settings: dict[str, Any] | None = None) -> str | None:
+    """The container backing this app.
+
+    The Veda registry only names a container for apps that are deployed as
+    one. Plenty of apps ship a Dockerfile *and* a dev server but have no
+    registry link, so settings.json can map them here without editing the
+    shared registry.
+    """
+    cfg = (settings if settings is not None else _load_settings()).get("apps", {})
+    saved = cfg.get(entry.get("name")) if isinstance(cfg, dict) else None
+    if isinstance(saved, dict) and saved.get("containerName"):
+        return str(saved["containerName"])
+    return entry.get("containerName") or None
+
+
+def _app_settings(entry: dict[str, Any], settings: dict[str, Any] | None = None) -> dict[str, Any]:
+    cfg = (settings if settings is not None else _load_settings()).get("apps", {})
+    saved = cfg.get(entry.get("name")) if isinstance(cfg, dict) else None
+    return saved if isinstance(saved, dict) else {}
+
+
+def _dev_cmd(entry: dict[str, Any], settings: dict[str, Any] | None = None) -> str | None:
+    """The command that runs this app as a local dev server.
+
+    Apps deployed as containers often have the *docker* command sitting in the
+    registry's runCmd, which says nothing about how to run them locally — those
+    keep their dev command in settings.json instead.
+    """
+    override = _app_settings(entry, settings).get("devCmd")
+    if override:
+        return str(override)
+    run_cmd = entry.get("runCmd")
+    return None if _is_docker_cmd(run_cmd) else (run_cmd or None)
+
+
+def _dev_port(entry: dict[str, Any], settings: dict[str, Any] | None = None) -> int | None:
+    """Port the dev server binds. Needed when it differs from the registry's
+    healthCheck target, which may describe the deployed container instead."""
+    override = _app_settings(entry, settings).get("devPort")
+    if override:
+        try:
+            return int(override)
+        except (TypeError, ValueError):
+            pass
+    return _port_from_healthcheck(entry.get("healthCheck") or {}) or _port_from_cmd(
+        _dev_cmd(entry, settings)
+    )
+
+
+def _supports_modes(entry: dict[str, Any], settings: dict[str, Any] | None = None) -> bool:
+    """True only when there is a genuine choice: a container *and* a way to run
+    the app locally."""
+    return bool(_container_for(entry, settings)) and bool(_dev_cmd(entry, settings))
+
+
+def _app_mode(
+    entry: dict[str, Any],
+    settings: dict[str, Any] | None = None,
+    container_states: dict[str, str] | None = None,
+) -> str:
+    container = _container_for(entry, settings)
+    if not _supports_modes(entry, settings):
+        # Container-only entries can never run as a dev server.
+        return "docker" if container else "dev"
+    cfg = (settings if settings is not None else _load_settings()).get("apps", {})
+    saved = cfg.get(entry.get("name")) if isinstance(cfg, dict) else None
+    mode = saved.get("mode") if isinstance(saved, dict) else None
+    if mode in ("dev", "docker"):
+        return mode
+    # Never switched from the dashboard — believe whatever is actually up, so
+    # stop/restart act on the running side instead of a guessed default.
+    if container_states is None:
+        container_states = docker_service.container_states()
+    return "docker" if container_states.get(container) == "running" else "dev"
+
+
+def _set_app_mode(name: str, mode: str) -> None:
+    settings = _load_settings()
+    apps_cfg = settings.get("apps")
+    if not isinstance(apps_cfg, dict):
+        apps_cfg = settings["apps"] = {}
+    entry = apps_cfg.get(name)
+    if not isinstance(entry, dict):
+        entry = apps_cfg[name] = {}
+    entry["mode"] = mode
+    _save_settings(settings)
+
+
 def _managed_vms() -> list[dict[str, Any]]:
     configured = _load_settings().get("vmware", {}).get("managed", [])
     if not isinstance(configured, list):
@@ -167,7 +264,37 @@ def _apps_with_sessions() -> list[dict[str, Any]]:
     processes = veda_apps.snapshot_processes()
     result = veda_apps.list_apps(processes)
     _attach_session_counts(result, processes)
+    _attach_run_modes(result)
     return result
+
+
+def _attach_run_modes(apps: list[dict[str, Any]]) -> None:
+    """Tag each app with its run mode, and for container-backed apps whether
+    that container is up — one `docker ps` shared across the whole list."""
+    settings = _load_settings()
+    containers = {a.get("name"): _container_for(a, settings) for a in apps}
+    states = docker_service.container_states() if any(containers.values()) else {}
+    for entry in apps:
+        container = containers.get(entry.get("name"))
+        dev_port = _dev_port(entry, settings)
+        entry["containerName"] = container
+        entry["devCmd"] = _dev_cmd(entry, settings)
+        entry["supportsModes"] = _supports_modes(entry, settings)
+        entry["mode"] = _app_mode(entry, settings, states)
+        if not container:
+            continue
+        entry["containerStatus"] = states.get(container)
+        if entry["mode"] == "docker":
+            # In docker mode the container is the source of truth. A registry
+            # healthCheck port can point at the dev server's port, or at a port
+            # some *other* container publishes, and then report a false "up".
+            entry["status"] = "running" if entry["containerStatus"] == "running" else "stopped"
+            entry["monitorable"] = True
+        elif dev_port and dev_port != _port_from_healthcheck(entry.get("healthCheck") or {}):
+            # Dev server on a different port than the deployed container — the
+            # registry healthCheck would be probing the container's port.
+            entry["status"] = "running" if _is_port_open(dev_port) else "stopped"
+            entry["monitorable"] = True
 
 
 @app.get("/api/apps")
@@ -182,9 +309,28 @@ async def app_start(name: str) -> JSONResponse:
     if not entry:
         return JSONResponse({"ok": False, "error": f"unknown app: {name}"}, status_code=404)
 
-    run_cmd = entry.get("runCmd")
+    container = _container_for(entry)
+    if _supports_modes(entry) and _app_mode(entry) == "docker":
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, docker_service.start, container)
+        if result.get("ok"):
+            result.setdefault("message", f"started container {container}")
+        return JSONResponse(result)
+
+    if not _dev_cmd(entry):
+        return JSONResponse({"ok": False, "error": "no dev command configured"}, status_code=400)
+
+    error = _start_local(entry)
+    if error:
+        return JSONResponse({"ok": False, "error": error}, status_code=500)
+    return JSONResponse({"ok": True, "message": f"started {name}"})
+
+
+def _start_local(entry: dict[str, Any]) -> str | None:
+    """Launch the app's dev command on this host. Returns an error, or None."""
+    run_cmd = _dev_cmd(entry)
     if not run_cmd:
-        return JSONResponse({"ok": False, "error": "no runCmd configured"}, status_code=400)
+        return "no dev command configured"
 
     cwd = entry.get("localPath")
     if cwd and not Path(cwd).is_dir():
@@ -209,11 +355,10 @@ async def app_start(name: str) -> JSONResponse:
         try:
             subprocess.Popen(run_cmd, cwd=cwd, shell=True, creationflags=_NO_WINDOW)
         except Exception as exc:  # noqa: BLE001
-            return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+            return str(exc)
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
-
-    return JSONResponse({"ok": True, "message": f"started {name}"})
+        return str(exc)
+    return None
 
 
 @app.post("/api/apps/{name}/restart")
@@ -225,20 +370,19 @@ async def app_restart(name: str) -> JSONResponse:
     # Container-backed apps (dockerImage/containerName in the registry) are
     # restarted via `docker restart` — never by killing/re-running runCmd,
     # since runCmd for these entries is typically just the local-dev fallback.
-    container_name = entry.get("containerName")
-    if container_name:
+    container_name = _container_for(entry)
+    if container_name and _app_mode(entry) == "docker":
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, docker_service.restart, container_name)
         if result.get("ok"):
             result.setdefault("message", f"restarted container {container_name}")
         return JSONResponse(result)
 
-    run_cmd = entry.get("runCmd")
+    run_cmd = _dev_cmd(entry)
     if not run_cmd:
-        return JSONResponse({"ok": False, "error": "no runCmd configured"}, status_code=400)
+        return JSONResponse({"ok": False, "error": "no dev command configured"}, status_code=400)
 
-    hc = entry.get("healthCheck") or {}
-    port: int | None = _port_from_healthcheck(hc) or _port_from_cmd(run_cmd)
+    port: int | None = _dev_port(entry)
     token: str | None = None if port else _first_token(run_cmd)
     cwd: str | None = entry.get("localPath") or None
 
@@ -383,22 +527,69 @@ async def app_stop(name: str) -> JSONResponse:
     if not entry:
         return JSONResponse({"ok": False, "error": f"unknown app: {name}"}, status_code=404)
 
-    killed = 0
-    hc = entry.get("healthCheck") or {}
-    port = _port_from_healthcheck(hc) or _port_from_cmd(entry.get("runCmd"))
+    container = _container_for(entry)
+    if _supports_modes(entry) and _app_mode(entry) == "docker":
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, docker_service.stop, container)
+        if result.get("ok"):
+            result.setdefault("message", f"stopped container {container}")
+        return JSONResponse(result)
 
-    if port is not None:
-        killed += _kill_by_port(port)
-
-    if killed == 0:
-        # Fall back: match the first runCmd token against process names.
-        token = _first_token(entry.get("runCmd"))
-        if token:
-            killed += _kill_by_name(token)
-
+    killed = _stop_local(entry)
     if killed:
         return JSONResponse({"ok": True, "message": f"stopped {name} ({killed} proc)"})
     return JSONResponse({"ok": False, "error": "no matching process found"}, status_code=404)
+
+
+def _stop_local(entry: dict[str, Any]) -> int:
+    """Kill the host processes serving this app. Returns how many were killed."""
+    port = _dev_port(entry)
+
+    killed = _kill_by_port(port) if port is not None else 0
+    if killed == 0:
+        # Fall back: match the first command token against process names.
+        token = _first_token(_dev_cmd(entry))
+        if token:
+            killed += _kill_by_name(token)
+    return killed
+
+
+@app.post("/api/apps/{name}/mode")
+async def app_set_mode(name: str, payload: dict[str, Any]) -> JSONResponse:
+    """Flip an app between its dev server and its container, stopping whichever
+    side is losing so the two never fight over the same port."""
+    entry = veda_apps.get_app(name)
+    if not entry:
+        return JSONResponse({"ok": False, "error": f"unknown app: {name}"}, status_code=404)
+
+    mode = str(payload.get("mode") or "").lower()
+    if mode not in ("dev", "docker"):
+        return JSONResponse({"ok": False, "error": "mode must be 'dev' or 'docker'"}, status_code=400)
+    if not _supports_modes(entry):
+        return JSONResponse(
+            {"ok": False, "error": f"{name} has no dev/docker choice to make"}, status_code=400
+        )
+
+    container = _container_for(entry)
+    loop = asyncio.get_running_loop()
+    _set_app_mode(name, mode)
+
+    if mode == "docker":
+        await loop.run_in_executor(None, _stop_local, entry)
+        result = await loop.run_in_executor(None, docker_service.start, container)
+        if not result.get("ok"):
+            return JSONResponse(
+                {"ok": False, "error": f"docker start {container}: {result.get('error')}"},
+                status_code=500,
+            )
+        return JSONResponse({"ok": True, "message": f"{name} now running in Docker"})
+
+    # dev: free the port the container holds before the dev server binds it.
+    await loop.run_in_executor(None, docker_service.stop, container)
+    error = await loop.run_in_executor(None, _start_local, entry)
+    if error:
+        return JSONResponse({"ok": False, "error": error}, status_code=500)
+    return JSONResponse({"ok": True, "message": f"{name} now running as dev server"})
 
 
 # ----------------------------------------------------------------------------
@@ -731,12 +922,42 @@ def _first_token(run_cmd: str | None) -> str | None:
     return name
 
 
+# Ports published by a container are held by Docker's proxy processes, not by
+# the app. Killing one of those takes Docker Desktop down with every container
+# on it — always stop the container instead.
+_DOCKER_PROXY_PROCESSES = frozenset(
+    {
+        "com.docker.backend",
+        "com.docker.proxy",
+        "docker",
+        "dockerd",
+        "docker desktop",
+        "vpnkit",
+        "wslrelay",
+        "wslhost",
+        "wsl",
+    }
+)
+
+
+def _is_docker_proxy(proc: psutil.Process) -> bool:
+    try:
+        name = proc.name().lower()
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return False
+    if name.endswith(".exe"):
+        name = name[:-4]
+    return name in _DOCKER_PROXY_PROCESSES
+
+
 def _kill_by_port(port: int) -> int:
     killed = 0
     for conn in psutil.net_connections(kind="inet"):
         if conn.laddr and conn.laddr.port == port and conn.pid:
             try:
                 proc = psutil.Process(conn.pid)
+                if _is_docker_proxy(proc):
+                    continue
                 proc.terminate()
                 killed += 1
             except (psutil.NoSuchProcess, psutil.AccessDenied):

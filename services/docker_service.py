@@ -104,6 +104,27 @@ def list_containers() -> dict[str, Any]:
     return {"available": True, "containers": containers}
 
 
+def container_states() -> dict[str, str]:
+    """Cheap {name: "running"|"stopped"} map.
+
+    `list_containers()` also shells out for image metadata, which is wasted
+    work when a caller only needs to know whether a container is up.
+    """
+    try:
+        proc = _run(["ps", "-a", "--format", "{{.Names}}\t{{.State}}"])
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return {}
+    if proc.returncode != 0:
+        return {}
+    states: dict[str, str] = {}
+    for line in proc.stdout.splitlines():
+        name, _, state = line.partition("\t")
+        name = name.strip()
+        if name:
+            states[name] = "running" if state.strip().lower() == "running" else "stopped"
+    return states
+
+
 def start(name: str) -> dict[str, Any]:
     return _control("start", name)
 
